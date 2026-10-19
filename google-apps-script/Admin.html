@@ -258,7 +258,7 @@
       display: grid;
       place-items: center;
       border-radius: 50%;
-      background: conic-gradient(var(--gold) var(--score-angle, 0deg), #ece9e2 0);
+      background: conic-gradient(var(--score-color, var(--gold)) var(--score-angle, 0deg), #ece9e2 0);
       position: relative;
       font-size: 17px;
       font-weight: 850;
@@ -266,6 +266,18 @@
     .score-ring::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #fff; }
     .score-ring span { position: relative; }
     .seo-meter p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .seo-check-summary { display: flex; justify-content: space-between; gap: 10px; margin: 18px 0 8px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .seo-checklist { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
+    .seo-checklist li { display: grid; grid-template-columns: 17px 1fr; gap: 8px; align-items: start; padding: 8px 0; border-bottom: 1px solid #efede8; color: #555; font-size: 12px; }
+    .seo-checklist li:last-child { border-bottom: 0; }
+    .seo-check-icon { position: relative; width: 15px; height: 15px; margin-top: 1px; border: 1px solid #b9b6af; border-radius: 50%; background: #fff; color: transparent; font-size: 0; }
+    .seo-checklist li.pass { color: #294b38; }
+    .seo-checklist li.pass .seo-check-icon { border-color: var(--success); background: var(--success); }
+    .seo-checklist li.pass .seo-check-icon::after { content: ""; position: absolute; top: 2px; left: 5px; width: 3px; height: 6px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+    .density { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .density-head { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
+    .density-track { overflow: hidden; height: 6px; margin-top: 7px; border-radius: 99px; background: #ece9e2; }
+    .density-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--warning); transition: width .2s ease; }
 
     .sticky-actions { position: sticky; top: 86px; }
     .action-stack { display: grid; gap: 9px; }
@@ -558,6 +570,26 @@
                     <div id="score-ring" class="score-ring"><span id="score-value">0</span></div>
                     <div><strong id="score-label">Cần tối ưu</strong><p>Điểm tham khảo dựa trên các trường quan trọng.</p></div>
                   </div>
+                  <div class="seo-check-summary"><span>Tiêu chí on-page</span><span id="seo-check-count">0/13 đạt</span></div>
+                  <ul id="seo-checklist" class="seo-checklist">
+                    <li data-seo-check="keyword"><span class="seo-check-icon">.</span><span>Đã nhập từ khóa chính</span></li>
+                    <li data-seo-check="title-keyword"><span class="seo-check-icon">.</span><span>Tiêu đề bài viết chứa từ khóa</span></li>
+                    <li data-seo-check="seo-title"><span class="seo-check-icon">.</span><span>Tiêu đề SEO dài 30–60 ký tự</span></li>
+                    <li data-seo-check="description"><span class="seo-check-icon">.</span><span>Mô tả SEO dài 120–160 ký tự</span></li>
+                    <li data-seo-check="description-keyword"><span class="seo-check-icon">.</span><span>Mô tả SEO chứa từ khóa</span></li>
+                    <li data-seo-check="slug"><span class="seo-check-icon">.</span><span>Slug ngắn và chứa từ khóa</span></li>
+                    <li data-seo-check="content-length"><span class="seo-check-icon">.</span><span>Nội dung có ít nhất 600 từ</span></li>
+                    <li data-seo-check="intro-keyword"><span class="seo-check-icon">.</span><span>Từ khóa xuất hiện trong phần mở đầu</span></li>
+                    <li data-seo-check="heading"><span class="seo-check-icon">.</span><span>Nội dung có tiêu đề phụ H2/H3</span></li>
+                    <li data-seo-check="image"><span class="seo-check-icon">.</span><span>Có ảnh đại diện</span></li>
+                    <li data-seo-check="image-alt"><span class="seo-check-icon">.</span><span>Ảnh có văn bản alt</span></li>
+                    <li data-seo-check="internal-link"><span class="seo-check-icon">.</span><span>Có liên kết nội bộ</span></li>
+                    <li data-seo-check="external-link"><span class="seo-check-icon">.</span><span>Có liên kết ngoài hữu ích</span></li>
+                  </ul>
+                  <div class="density">
+                    <div class="density-head"><span>Mật độ từ khóa</span><strong id="keyword-density">0,0%</strong></div>
+                    <div class="density-track"><span id="density-bar"></span></div>
+                  </div>
                   <input id="seo-score" name="seo_score" type="hidden" value="0">
                   <input id="word-count-input" name="word_count" type="hidden" value="0">
                 </div>
@@ -820,12 +852,19 @@
       const title = $('#post-title').value.trim();
       const slug = $('#post-name').value.trim();
       const content = $('#content').value;
-      const keyword = $('#focus-keyword').value.trim().toLowerCase();
-      const seoTitle = $('#seo-title').value.trim();
-      const description = $('#seo-description').value.trim();
-      const alt = $('#featured-alt').value.trim().toLowerCase();
+      const keyword = $('#focus-keyword').value.split(',')[0].trim();
+      const seoTitle = $('#seo-title').value.trim() || title;
+      const description = $('#seo-description').value.trim() || $('#post-excerpt').value.trim();
+      const alt = $('#featured-alt').value.trim();
+      const imageUrl = $('#featured-image').value.trim();
       const plainContent = stripHtml(content).trim();
       const wordCount = plainContent ? plainContent.split(/\s+/).filter(Boolean).length : 0;
+      const firstWords = plainContent.split(/\s+/).slice(0, 160).join(' ');
+      const normalizedKeyword = normalize(keyword);
+      const keywordSlug = slugify(keyword);
+      const links = Array.from(content.matchAll(/href=["']([^"']+)["']/gi), match => match[1]);
+      const hasInternalLink = links.some((url) => url.startsWith('/') || url.startsWith('#') || /^https?:\/\/(www\.)?goldhomecons\.vn(?:\/|$)/i.test(url));
+      const hasExternalLink = links.some((url) => /^https?:\/\//i.test(url) && !/^https?:\/\/(www\.)?goldhomecons\.vn(?:\/|$)/i.test(url));
 
       $('#word-count').textContent = wordCount;
       $('#word-count-input').value = wordCount;
@@ -833,23 +872,45 @@
       $('#seo-description-count').textContent = description.length;
       $('#slug-preview').textContent = slug || 'duong-dan-bai-viet';
 
-      const checks = [
-        Boolean(keyword),
-        keyword && title.toLowerCase().includes(keyword),
-        keyword && seoTitle.toLowerCase().includes(keyword),
-        seoTitle.length >= 35 && seoTitle.length <= 65,
-        description.length >= 120 && description.length <= 165,
-        wordCount >= 600,
-        /<h2[\s>]/i.test(content),
-        Boolean(slug),
-        keyword && alt.includes(keyword),
-        Boolean($('#featured-image').value.trim())
-      ];
-      const score = Math.round(checks.filter(Boolean).length / checks.length * 100);
+      const checks = {
+        keyword: Boolean(keyword),
+        'title-keyword': Boolean(keyword) && normalize(title).includes(normalizedKeyword),
+        'seo-title': seoTitle.length >= 30 && seoTitle.length <= 60,
+        description: description.length >= 120 && description.length <= 160,
+        'description-keyword': Boolean(keyword) && normalize(description).includes(normalizedKeyword),
+        slug: Boolean(slug) && slug.length <= 75 && (!keywordSlug || slug.includes(keywordSlug)),
+        'content-length': wordCount >= 600,
+        'intro-keyword': Boolean(keyword) && normalize(firstWords).includes(normalizedKeyword),
+        heading: /<h[23][\s>]/i.test(content),
+        image: Boolean(imageUrl),
+        'image-alt': Boolean(alt),
+        'internal-link': hasInternalLink,
+        'external-link': hasExternalLink
+      };
+      const passed = Object.values(checks).filter(Boolean).length;
+      const total = Object.keys(checks).length;
+      const score = Math.round(passed / total * 100);
+      Object.entries(checks).forEach(([name, pass]) => {
+        const item = $(`[data-seo-check="${name}"]`);
+        if (item) item.classList.toggle('pass', pass);
+      });
+      $('#seo-check-count').textContent = `${passed}/${total} đạt`;
       $('#seo-score').value = score;
       $('#score-value').textContent = score;
       $('#score-ring').style.setProperty('--score-angle', `${score * 3.6}deg`);
+      $('#score-ring').style.setProperty('--score-color', score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warning)' : 'var(--danger)');
       $('#score-label').textContent = score >= 80 ? 'Tối ưu tốt' : score >= 55 ? 'Có thể cải thiện' : 'Cần tối ưu';
+
+      let density = 0;
+      if (normalizedKeyword && plainContent && wordCount) {
+        const escapedKeyword = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const matches = normalize(plainContent).match(new RegExp(`(^|\\s)${escapedKeyword}(?=\\s|[.,!?;:]|$)`, 'g')) || [];
+        const keywordWordCount = normalizedKeyword.split(/\s+/).filter(Boolean).length;
+        density = matches.length * keywordWordCount / wordCount * 100;
+      }
+      $('#keyword-density').textContent = `${density.toFixed(1).replace('.', ',')}%`;
+      $('#density-bar').style.width = `${Math.min(density / 3 * 100, 100)}%`;
+      $('#density-bar').style.background = density >= 0.5 && density <= 2.5 ? 'var(--success)' : density > 2.5 ? 'var(--danger)' : 'var(--warning)';
     }
 
     function slugify(value) {
@@ -923,7 +984,7 @@
       $('#post-name').value = slugify($('#post-name').value);
       updateEditorMetrics();
     });
-    ['content', 'focus-keyword', 'seo-title', 'seo-description', 'featured-alt', 'featured-image'].forEach((id) => {
+    ['content', 'post-excerpt', 'focus-keyword', 'seo-title', 'seo-description', 'featured-alt', 'featured-image'].forEach((id) => {
       $('#' + id).addEventListener('input', updateEditorMetrics);
     });
 

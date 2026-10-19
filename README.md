@@ -8,7 +8,7 @@
 - Màn hình danh sách, tìm kiếm và lọc trạng thái bài viết.
 - Tạo, sửa và xóa bài viết trong Google Sheet.
 - Form nội dung, danh mục, ảnh đại diện, Rank Math, social card và thiết lập xuất bản.
-- Tính nhanh số từ và điểm hoàn thiện SEO ngay khi nhập.
+- Tính điểm SEO trực tiếp theo 13 tiêu chí on-page, hiển thị từng mục đạt/chưa đạt, số từ và mật độ từ khóa ngay khi nhập.
 
 ## Triển khai ứng dụng thật
 
