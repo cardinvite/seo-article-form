@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Form viết và tối ưu bài đăng chuẩn SEO cho website Gold Home Construction.">
+  <title>SEO Post Studio — Gold Home Construction</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="#top" aria-label="SEO Post Studio - về đầu trang">
+      <span class="brand-mark" aria-hidden="true">GH</span>
+      <span>
+        <strong>Gold Home SEO Studio</strong>
+        <small>goldhomecons.vn · Rank Math workflow</small>
+      </span>
+    </a>
+    <div class="header-status" aria-live="polite">
+      <span class="status-dot"></span>
+      <span id="save-status">Chưa có thay đổi</span>
+    </div>
+    <div class="header-actions">
+      <button class="button button-ghost" type="button" id="export-button">Xuất JSON</button>
+      <button class="button button-secondary" type="button" id="save-button">Lưu bản nháp</button>
+      <button class="button button-primary" type="submit" form="seo-post-form" id="submit-button">Lưu vào Google Sheet</button>
+    </div>
+  </header>
+
+  <main class="page-shell" id="top">
+    <section class="page-intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">Trình soạn thảo bài viết</p>
+        <h1 id="page-title">Tạo bài viết chuẩn SEO cho Gold Home</h1>
+        <p>Soạn nội dung ngành thiết kế – xây dựng, theo dõi chất lượng SEO theo thời gian thực và xuất payload tương thích với WordPress.</p>
+      </div>
+      <div class="intro-progress" aria-label="Tiến độ hoàn thiện">
+        <span><strong id="completion-value">0%</strong> hoàn thiện</span>
+        <div class="progress-track"><span id="completion-bar"></span></div>
+      </div>
+    </section>
+
+    <div class="database-status" id="database-status" role="status" aria-live="polite">
+      <span class="database-status-dot"></span>
+      <div>
+        <strong>Đang kiểm tra kết nối Google Sheet</strong>
+        <small>Form vẫn có thể lưu bản nháp trên trình duyệt.</small>
+      </div>
+    </div>
+
+    <form id="seo-post-form" novalidate>
+      <div class="honeypot" aria-hidden="true">
+        <label for="website">Không điền trường này</label>
+        <input type="text" id="website" name="_gotcha" tabindex="-1" autocomplete="off">
+      </div>
+      <div class="workspace-grid">
+        <div class="editor-column">
+          <section class="panel panel-main" aria-labelledby="content-heading">
+            <div class="panel-heading">
+              <div>
+                <span class="step-number">01</span>
+                <h2 id="content-heading">Nội dung bài viết</h2>
+              </div>
+              <span class="required-note">* Bắt buộc</span>
+            </div>
+
+            <div class="field field-title">
+              <label for="post_title">Tiêu đề bài viết <span aria-hidden="true">*</span></label>
+              <input type="text" id="post_title" name="post_title" maxlength="120" placeholder="Ví dụ: Xây nhà trọn gói 2026: Quy trình và bảng giá chi tiết" required>
+              <div class="field-meta">
+                <span>Tiêu đề chính hiển thị trên bài viết</span>
+                <span><strong id="post-title-count">0</strong>/120</span>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="label-row">
+                <label for="post_name">Đường dẫn tĩnh (slug)</label>
+                <button class="text-button" type="button" id="regenerate-slug">Tạo lại từ tiêu đề</button>
+              </div>
+              <div class="slug-field">
+                <span>goldhomecons.vn/</span>
+                <input type="text" id="post_name" name="post_name" maxlength="100" placeholder="duong-dan-bai-viet">
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="label-row">
+                <label for="content">Nội dung <span aria-hidden="true">*</span></label>
+                <span class="content-stats"><strong id="word-count">0</strong> từ · <strong id="reading-time">0</strong> phút đọc</span>
+              </div>
+              <div class="editor-shell">
+                <div class="editor-toolbar" role="toolbar" aria-label="Định dạng nhanh">
+                  <button type="button" data-wrap="strong" title="In đậm"><strong>B</strong></button>
+                  <button type="button" data-wrap="em" title="In nghiêng"><em>I</em></button>
+                  <button type="button" data-block="h2">H2</button>
+                  <button type="button" data-block="h3">H3</button>
+                  <button type="button" data-block="ul">Danh sách</button>
+                  <button type="button" data-link>Liên kết</button>
+                  <span class="toolbar-spacer"></span>
+                  <span>Mã HTML</span>
+                </div>
+                <textarea id="content" name="content" rows="18" placeholder="Viết nội dung bài tại đây. Dùng tiêu đề H2/H3, đoạn văn ngắn và liên kết hữu ích để tăng khả năng đọc..." required></textarea>
+              </div>
+              <p class="field-help">Khuyến nghị tối thiểu 600 từ; từ khóa chính nên xuất hiện tự nhiên trong phần mở đầu và ít nhất một tiêu đề phụ.</p>
+            </div>
+
+            <div class="field">
+              <label for="post_excerpt">Mô tả ngắn / đoạn trích</label>
+              <textarea id="post_excerpt" name="post_excerpt" rows="3" maxlength="300" placeholder="Tóm tắt ngắn nội dung bài viết để hiển thị trên trang danh sách..."></textarea>
+              <div class="field-meta">
+                <span>Có thể dùng làm mô tả dự phòng nếu chưa nhập meta description</span>
+                <span><strong id="excerpt-count">0</strong>/300</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="media-heading">
+            <div class="panel-heading">
+              <div>
+                <span class="step-number">02</span>
+                <h2 id="media-heading">Ảnh đại diện & phân loại</h2>
+              </div>
+            </div>
+            <div class="two-column-fields">
+              <div class="field field-span-2">
+                <label for="featured_image">Ảnh đại diện</label>
+                <label class="upload-zone" for="featured_image">
+                  <input type="file" id="featured_image" name="featured_image" accept="image/png,image/jpeg,image/webp">
+                  <span class="upload-icon" aria-hidden="true">↑</span>
+                  <span><strong>Chọn ảnh để tải lên</strong><small>JPG, PNG hoặc WebP · đề xuất 1200 × 630 px</small></span>
+                  <img id="featured-preview" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Xem trước ảnh đại diện">
+                </label>
+              </div>
+              <div class="field">
+                <label for="featured_image_url">Hoặc URL ảnh</label>
+                <input type="url" id="featured_image_url" name="featured_image_url" placeholder="https://.../anh-dai-dien.webp">
+              </div>
+              <div class="field">
+                <label for="featured_image_alt">Văn bản thay thế (alt)</label>
+                <input type="text" id="featured_image_alt" name="featured_image_alt" maxlength="160" placeholder="Mô tả chính xác nội dung ảnh">
+              </div>
+              <fieldset class="field fieldset-card">
+                <legend>Danh mục</legend>
+                <div class="checkbox-grid">
+                  <label><input type="checkbox" name="post_category[]" value="thiet-ke-kien-truc"> Thiết kế kiến trúc</label>
+                  <label><input type="checkbox" name="post_category[]" value="thi-cong-xay-dung"> Thi công xây dựng</label>
+                  <label><input type="checkbox" name="post_category[]" value="xay-nha-tron-goi"> Xây nhà trọn gói</label>
+                  <label><input type="checkbox" name="post_category[]" value="thiet-ke-noi-that"> Thiết kế nội thất</label>
+                  <label><input type="checkbox" name="post_category[]" value="kien-thuc-xay-dung"> Kiến thức xây dựng</label>
+                  <label><input type="checkbox" name="post_category[]" value="du-an"> Dự án</label>
+                </div>
+              </fieldset>
+              <div class="field stack-fields">
+                <div>
+                  <label for="primary_category">Danh mục chính</label>
+                  <select id="primary_category" name="rank_math_primary_category">
+                    <option value="">Chọn danh mục chính</option>
+                    <option value="thiet-ke-kien-truc">Thiết kế kiến trúc</option>
+                    <option value="thi-cong-xay-dung">Thi công xây dựng</option>
+                    <option value="xay-nha-tron-goi">Xây nhà trọn gói</option>
+                    <option value="thiet-ke-noi-that">Thiết kế nội thất</option>
+                    <option value="kien-thuc-xay-dung">Kiến thức xây dựng</option>
+                    <option value="du-an">Dự án</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="post_tags">Thẻ bài viết</label>
+                  <input type="text" id="post_tags" name="tax_input[post_tag]" placeholder="xây nhà trọn gói, báo giá xây dựng, thiết kế nhà">
+                  <p class="field-help">Phân cách các thẻ bằng dấu phẩy.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="seo-heading">
+            <div class="panel-heading">
+              <div>
+                <span class="step-number">03</span>
+                <h2 id="seo-heading">Rank Math SEO</h2>
+              </div>
+              <span class="panel-badge">Quan trọng</span>
+            </div>
+            <div class="field">
+              <label for="rank_math_focus_keyword">Từ khóa chính <span aria-hidden="true">*</span></label>
+              <input type="text" id="rank_math_focus_keyword" name="rank_math_focus_keyword" placeholder="Ví dụ: xây nhà trọn gói" required>
+              <p class="field-help">Có thể thêm từ khóa phụ sau dấu phẩy. Từ khóa đầu tiên được dùng để chấm điểm.</p>
+            </div>
+            <div class="field">
+              <label for="rank_math_title">Tiêu đề SEO</label>
+              <input type="text" id="rank_math_title" name="rank_math_title" maxlength="70" placeholder="Để trống để dùng tiêu đề bài viết">
+              <div class="field-meta">
+                <span>Nên dài khoảng 50–60 ký tự</span>
+                <span id="seo-title-feedback"><strong id="seo-title-count">0</strong>/60</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="rank_math_description">Thẻ mô tả SEO</label>
+              <textarea id="rank_math_description" name="rank_math_description" rows="4" maxlength="180" placeholder="Mô tả hấp dẫn, có chứa từ khóa chính và lời kêu gọi hành động..."></textarea>
+              <div class="field-meta">
+                <span>Nên dài khoảng 120–160 ký tự</span>
+                <span id="meta-description-feedback"><strong id="meta-description-count">0</strong>/160</span>
+              </div>
+            </div>
+            <div class="two-column-fields">
+              <div class="field">
+                <label for="rank_math_canonical_url">Canonical URL</label>
+                <input type="url" id="rank_math_canonical_url" name="rank_math_canonical_url" placeholder="https://goldhomecons.vn/duong-dan/">
+              </div>
+              <div class="field">
+                <label for="rank_math_schema_type">Loại Schema</label>
+                <select id="rank_math_schema_type" name="rank_math_schema_type">
+                  <option value="BlogPosting" selected>BlogPosting</option>
+                  <option value="Article">Article</option>
+                  <option value="NewsArticle">NewsArticle</option>
+                  <option value="FAQPage">FAQPage</option>
+                  <option value="HowTo">HowTo</option>
+                </select>
+              </div>
+            </div>
+            <fieldset class="field fieldset-card">
+              <legend>Robots Meta</legend>
+              <div class="toggle-grid">
+                <label class="toggle"><input type="checkbox" name="rank_math_robots[]" value="index" checked data-robot-pair="noindex"><span></span> Index</label>
+                <label class="toggle"><input type="checkbox" name="rank_math_robots[]" value="noindex" data-robot-pair="index"><span></span> Noindex</label>
+                <label class="toggle"><input type="checkbox" name="rank_math_robots[]" value="follow" checked data-robot-pair="nofollow"><span></span> Follow</label>
+                <label class="toggle"><input type="checkbox" name="rank_math_robots[]" value="nofollow" data-robot-pair="follow"><span></span> Nofollow</label>
+                <label class="toggle"><input type="checkbox" name="rank_math_robots[]" value="noarchive"><span></span> Noarchive</label>
+                <label class="toggle"><input type="checkbox" name="rank_math_robots[]" value="nosnippet"><span></span> Nosnippet</label>
+              </div>
+            </fieldset>
+            <label class="check-row">
+              <input type="checkbox" id="rank_math_pillar_content" name="rank_math_pillar_content" value="on">
+              <span><strong>Đánh dấu là nội dung trụ cột</strong><small>Dùng cho bài chuyên sâu, quan trọng trong cấu trúc nội dung website.</small></span>
+            </label>
+          </section>
+
+          <section class="panel" aria-labelledby="social-heading">
+            <div class="panel-heading">
+              <div>
+                <span class="step-number">04</span>
+                <h2 id="social-heading">Chia sẻ mạng xã hội</h2>
+              </div>
+              <span class="optional-note">Tùy chọn</span>
+            </div>
+            <div class="social-tabs" role="tablist" aria-label="Nền tảng mạng xã hội">
+              <button type="button" class="social-tab active" data-social-tab="facebook" role="tab" aria-selected="true">Facebook / Open Graph</button>
+              <button type="button" class="social-tab" data-social-tab="twitter" role="tab" aria-selected="false">X / Twitter</button>
+            </div>
+            <div class="social-panel active" id="social-facebook" role="tabpanel">
+              <div class="field">
+                <label for="rank_math_facebook_title">Tiêu đề Facebook</label>
+                <input type="text" id="rank_math_facebook_title" name="rank_math_facebook_title" maxlength="95" placeholder="Để trống để dùng tiêu đề SEO">
+              </div>
+              <div class="field">
+                <label for="rank_math_facebook_description">Mô tả Facebook</label>
+                <textarea id="rank_math_facebook_description" name="rank_math_facebook_description" rows="3" maxlength="200" placeholder="Để trống để dùng mô tả SEO"></textarea>
+              </div>
+              <div class="field">
+                <label for="rank_math_facebook_image">URL ảnh Facebook</label>
+                <input type="url" id="rank_math_facebook_image" name="rank_math_facebook_image" placeholder="Để trống để dùng ảnh đại diện">
+              </div>
+            </div>
+            <div class="social-panel" id="social-twitter" role="tabpanel" hidden>
+              <div class="two-column-fields">
+                <div class="field">
+                  <label for="rank_math_twitter_card_type">Loại thẻ</label>
+                  <select id="rank_math_twitter_card_type" name="rank_math_twitter_card_type">
+                    <option value="summary_large_image">Summary Card with Large Image</option>
+                    <option value="summary">Summary Card</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="rank_math_twitter_use_facebook">Dữ liệu hiển thị</label>
+                  <select id="rank_math_twitter_use_facebook" name="rank_math_twitter_use_facebook">
+                    <option value="on">Dùng dữ liệu Facebook</option>
+                    <option value="off">Tùy chỉnh riêng</option>
+                  </select>
+                </div>
+              </div>
+              <div id="twitter-custom-fields" hidden>
+                <div class="field">
+                  <label for="rank_math_twitter_title">Tiêu đề X / Twitter</label>
+                  <input type="text" id="rank_math_twitter_title" name="rank_math_twitter_title" maxlength="70">
+                </div>
+                <div class="field">
+                  <label for="rank_math_twitter_description">Mô tả X / Twitter</label>
+                  <textarea id="rank_math_twitter_description" name="rank_math_twitter_description" rows="3" maxlength="200"></textarea>
+                </div>
+                <div class="field">
+                  <label for="rank_math_twitter_image">URL ảnh X / Twitter</label>
+                  <input type="url" id="rank_math_twitter_image" name="rank_math_twitter_image">
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="settings-heading">
+            <div class="panel-heading">
+              <div>
+                <span class="step-number">05</span>
+                <h2 id="settings-heading">Thiết lập bài viết</h2>
+              </div>
+            </div>
+            <div class="three-column-fields">
+              <div class="field">
+                <label for="post_status">Trạng thái</label>
+                <select id="post_status" name="post_status">
+                  <option value="draft">Bản nháp</option>
+                  <option value="pending">Chờ duyệt</option>
+                  <option value="publish">Xuất bản</option>
+                  <option value="future">Lên lịch</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="publish_at">Thời gian xuất bản</label>
+                <input type="datetime-local" id="publish_at" name="publish_at">
+              </div>
+              <div class="field">
+                <label for="post_author">Tác giả</label>
+                <select id="post_author" name="post_author">
+                  <option value="1">Gold Home</option>
+                  <option value="editor">Biên tập viên</option>
+                </select>
+              </div>
+            </div>
+            <fieldset class="field fieldset-card">
+              <legend>Hiển thị</legend>
+              <div class="radio-row">
+                <label><input type="radio" name="visibility" value="public" checked> Công khai</label>
+                <label><input type="radio" name="visibility" value="password"> Bảo vệ bằng mật khẩu</label>
+                <label><input type="radio" name="visibility" value="private"> Riêng tư</label>
+              </div>
+              <div class="field compact-field" id="password-field" hidden>
+                <label for="post_password">Mật khẩu bài viết</label>
+                <input type="text" id="post_password" name="post_password" maxlength="255">
+              </div>
+            </fieldset>
+            <div class="settings-row">
+              <label class="check-row compact">
+                <input type="checkbox" name="sticky" value="sticky">
+                <span><strong>Ghim lên trang nhất</strong></span>
+              </label>
+              <label class="check-row compact">
+                <input type="checkbox" name="comment_status" value="open" checked>
+                <span><strong>Cho phép bình luận</strong></span>
+              </label>
+              <label class="check-row compact">
+                <input type="checkbox" name="ping_status" value="open" checked>
+                <span><strong>Cho phép pingback/trackback</strong></span>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <aside class="insights-column" aria-label="Phân tích SEO">
+          <section class="score-card">
+            <div class="score-summary">
+              <div class="score-ring" id="score-ring" style="--score: 0">
+                <span><strong id="seo-score">0</strong><small>/100</small></span>
+              </div>
+              <div>
+                <p class="eyebrow">Điểm SEO</p>
+                <h2 id="score-label">Cần bổ sung</h2>
+                <p id="score-message">Hoàn thiện các trường quan trọng để bắt đầu chấm điểm.</p>
+              </div>
+            </div>
+            <div class="score-legend">
+              <span><i class="bad"></i> 0–49</span>
+              <span><i class="medium"></i> 50–79</span>
+              <span><i class="good"></i> 80–100</span>
+            </div>
+          </section>
+
+          <section class="preview-card" aria-labelledby="preview-heading">
+            <div class="card-heading-row">
+              <h2 id="preview-heading">Xem trước Google</h2>
+              <div class="device-toggle" aria-label="Thiết bị xem trước">
+                <button type="button" class="active" data-device="desktop" aria-label="Máy tính">▣</button>
+                <button type="button" data-device="mobile" aria-label="Điện thoại">▯</button>
+              </div>
+            </div>
+            <div class="serp-preview" id="serp-preview">
+              <div class="serp-site">
+                <span class="site-favicon">H</span>
+                <span>Gold Home Construction<small id="serp-url">goldhomecons.vn/</small></span>
+              </div>
+              <h3 id="serp-title">Tiêu đề bài viết sẽ hiển thị tại đây</h3>
+              <p id="serp-description">Mô tả SEO sẽ xuất hiện ở đây. Hãy viết nội dung súc tích, rõ ràng và hấp dẫn người tìm kiếm.</p>
+            </div>
+          </section>
+
+          <section class="checklist-card" aria-labelledby="checklist-heading">
+            <div class="card-heading-row">
+              <h2 id="checklist-heading">Kiểm tra tối ưu</h2>
+              <span id="check-count">0/12 đạt</span>
+            </div>
+            <ul class="seo-checklist" id="seo-checklist">
+              <li data-check="keyword"><span></span><div><strong>Đã nhập từ khóa chính</strong><small>Chọn một cụm từ người dùng thực sự tìm kiếm.</small></div></li>
+              <li data-check="title-keyword"><span></span><div><strong>Từ khóa có trong tiêu đề</strong><small>Ưu tiên đặt gần đầu tiêu đề.</small></div></li>
+              <li data-check="seo-title"><span></span><div><strong>Độ dài tiêu đề SEO phù hợp</strong><small>Mục tiêu 30–60 ký tự.</small></div></li>
+              <li data-check="description"><span></span><div><strong>Mô tả SEO đạt độ dài tốt</strong><small>Mục tiêu 120–160 ký tự.</small></div></li>
+              <li data-check="description-keyword"><span></span><div><strong>Từ khóa có trong mô tả</strong><small>Diễn đạt tự nhiên, không nhồi từ khóa.</small></div></li>
+              <li data-check="slug"><span></span><div><strong>Slug ngắn và chứa từ khóa</strong><small>Không dấu, dùng dấu gạch ngang.</small></div></li>
+              <li data-check="content-length"><span></span><div><strong>Nội dung tối thiểu 600 từ</strong><small>Bài chuyên sâu thường cần 1.000 từ trở lên.</small></div></li>
+              <li data-check="intro-keyword"><span></span><div><strong>Từ khóa có trong phần mở đầu</strong><small>Kiểm tra 160 từ đầu tiên.</small></div></li>
+              <li data-check="heading"><span></span><div><strong>Nội dung có tiêu đề H2/H3</strong><small>Tạo cấu trúc rõ ràng, dễ đọc.</small></div></li>
+              <li data-check="image-alt"><span></span><div><strong>Ảnh đại diện có alt text</strong><small>Mô tả ảnh ngắn gọn, chính xác.</small></div></li>
+              <li data-check="internal-link"><span></span><div><strong>Có liên kết nội bộ</strong><small>Dẫn người đọc tới nội dung liên quan trên website.</small></div></li>
+              <li data-check="external-link"><span></span><div><strong>Có liên kết ngoài hữu ích</strong><small>Trích nguồn đáng tin cậy khi nội dung cần dẫn chứng.</small></div></li>
+            </ul>
+          </section>
+
+          <section class="density-card">
+            <div class="card-heading-row">
+              <h2>Mật độ từ khóa</h2>
+              <strong id="keyword-density">0%</strong>
+            </div>
+            <div class="density-track"><span id="density-bar"></span></div>
+            <p id="density-help">Mức đề xuất tham khảo: 0,5–2,5%. Ưu tiên câu văn tự nhiên.</p>
+          </section>
+        </aside>
+      </div>
+    </form>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# Gold Home SEO Content
+
+Ứng dụng quản lý bài viết chuẩn SEO cho `goldhomecons.vn`, dùng Google Apps Script làm Web App và Google Sheet làm nơi lưu dữ liệu.
+
+## Chức năng
+
+- Đăng nhập bằng tài khoản Google và kiểm tra danh sách admin ở máy chủ.
+- Màn hình danh sách, tìm kiếm và lọc trạng thái bài viết.
+- Tạo, sửa và xóa bài viết trong Google Sheet.
+- Form nội dung, danh mục, ảnh đại diện, Rank Math, social card và thiết lập xuất bản.
+- Tính nhanh số từ và điểm hoàn thiện SEO ngay khi nhập.
+
+## Triển khai ứng dụng thật
+
+Thực hiện theo [GOOGLE-SHEETS-SETUP.md](GOOGLE-SHEETS-SETUP.md). Hai file cần đưa vào project Apps Script là:
+
+- [Code.gs](google-apps-script/Code.gs)
+- [Admin.html](google-apps-script/Admin.html)
+
+## Bản form HTML tham khảo
+
+Các file `index.html`, `styles.css`, `app.js` và `config.js` là bản prototype độc lập ban đầu. Có thể chạy thử giao diện đó bằng:
+
+```bash
+python3 -m http.server 4173 --directory seo-article-form
+```
+
+Sau đó mở `http://127.0.0.1:4173`.
+
+## Các nhóm dữ liệu chính
+
+- Nội dung: tiêu đề, slug, nội dung HTML và đoạn trích.
+- Media/taxonomy: ảnh đại diện, alt text, danh mục chính, danh mục và thẻ.
+- Rank Math: focus keyword, SEO title, meta description, canonical, robots, schema và pillar content.
+- Social: Open Graph/Facebook và X/Twitter card.
+- Xuất bản: trạng thái, lịch đăng, tác giả, hiển thị, bình luận và pingback.
+
+Các trường nonce, ID phiên, ID bài viết, cấu hình giao diện, LiteSpeed và dữ liệu nội bộ của plugin không được đưa vào vì chúng phải do WordPress tạo ở phía máy chủ. Phiên bản hiện tại quản lý nội dung trong Google Sheet và chưa tự động đăng bài lên WordPress.
