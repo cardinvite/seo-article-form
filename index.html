@@ -175,13 +175,10 @@
         return;
       }
 
-      link.href = appUrl;
+      const loginUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
+      link.href = loginUrl;
       link.removeAttribute('aria-disabled');
-      status.textContent = 'Đang chuyển đến màn hình đăng nhập Google...';
-
-      window.setTimeout(function () {
-        window.location.replace(appUrl);
-      }, 900);
+      status.textContent = 'Hãy chọn đúng tài khoản Google đã được cấp quyền.';
     }());
   </script>
 </body>

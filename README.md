@@ -24,6 +24,9 @@ Thực hiện theo [GOOGLE-SHEETS-SETUP.md](GOOGLE-SHEETS-SETUP.md). Hai file c�
 - Người chưa đăng nhập sẽ được Google yêu cầu đăng nhập theo cấu hình deployment.
 - Người đã đăng nhập nhưng không thuộc `ADMIN_EMAILS` sẽ bị `Code.gs` từ chối.
 - Các thao tác xem, tạo, sửa và xóa đều kiểm tra lại quyền ở máy chủ.
+- `Code.gs` cũng đối chiếu Active User với Effective User và từ chối nếu Web App bị deploy nhầm dưới tài khoản chủ sở hữu.
+
+Luồng xác thực: `index.html` → Google Account Chooser → `doGet()` kiểm tra admin → dashboard → API CRUD kiểm tra admin lần nữa.
 
 `styles.css` và `app.js` được giữ lại làm mã tham khảo của prototype cũ nhưng không còn được tải bởi `index.html`.
 

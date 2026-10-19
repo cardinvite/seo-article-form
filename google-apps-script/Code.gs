@@ -69,8 +69,16 @@ function setup() {
 
 function doGet() {
   validateConfig_();
+  let admin;
+  try {
+    admin = requireAdmin_();
+  } catch (error) {
+    return accessDenied_(error.message);
+  }
+
   const template = HtmlService.createTemplateFromFile('Admin');
   template.appTitle = 'Gold Home SEO Studio';
+  template.adminEmail = admin.email;
   return template
     .evaluate()
     .setTitle('Gold Home SEO Studio')
@@ -290,13 +298,42 @@ function payloadFromRecord_(record) {
 
 function requireAdmin_() {
   const email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+  const effectiveEmail = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
   if (!email) {
     throw new Error('Không xác định được tài khoản Google. Hãy đăng nhập và triển khai Web App với Execute as: User accessing the web app.');
+  }
+  if (!effectiveEmail || effectiveEmail !== email) {
+    throw new Error('Web App đang triển khai sai chế độ. Hãy chọn Execute as: User accessing the web app.');
   }
   if (!ADMIN_EMAILS.includes(email)) {
     throw new Error(`Tài khoản ${email} không có quyền truy cập.`);
   }
   return { email };
+}
+
+function accessDenied_(message) {
+  const appUrl = ScriptApp.getService().getUrl() || '';
+  const switchUrl = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(appUrl)}`;
+  const safeMessage = escapeHtml_(message || 'Tài khoản không có quyền truy cập.');
+  const safeSwitchUrl = escapeHtml_(switchUrl);
+  const html = `<!doctype html>
+    <html lang="vi"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Không có quyền truy cập</title><style>
+    *{box-sizing:border-box}body{min-height:100vh;display:grid;place-items:center;margin:0;padding:24px;background:#171717;color:#171717;font-family:Arial,sans-serif}.card{width:min(460px,100%);padding:36px;border-radius:16px;background:#fff;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.35)}.mark{width:54px;height:54px;display:grid;place-items:center;margin:auto;border-radius:14px;background:#c49a47;color:#fff;font-weight:800}h1{margin:18px 0 8px;font-size:24px}p{margin:0 0 22px;color:#666;line-height:1.55}.button{display:inline-flex;min-height:42px;align-items:center;justify-content:center;padding:9px 16px;border-radius:8px;background:#171717;color:#fff;text-decoration:none;font-weight:700}
+    </style></head><body><main class="card"><div class="mark">GH</div><h1>Không có quyền truy cập</h1><p>${safeMessage}</p><a class="button" href="${safeSwitchUrl}">Chọn tài khoản Google khác</a></main></body></html>`;
+  return HtmlService.createHtmlOutput(html)
+    .setTitle('Không có quyền truy cập')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function escapeHtml_(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
 }
 
 function getReadySheet_() {

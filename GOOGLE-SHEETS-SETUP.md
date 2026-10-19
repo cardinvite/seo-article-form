@@ -45,6 +45,8 @@ Mở URL `/exec` để sử dụng ứng dụng. Mỗi quản trị viên có th
 
 > Không chọn **Execute as: Me**. Ứng dụng dùng email của người đang truy cập để kiểm tra danh sách admin ở phía máy chủ. Ba tài khoản admin cũng cần quyền Editor đối với Google Sheet.
 
+Nếu deploy nhầm **Execute as: Me**, mã máy chủ sẽ phát hiện Active User và Effective User không khớp rồi từ chối truy cập. Sau khi sửa tùy chọn deployment, luôn chọn **New version** trước khi deploy lại.
+
 ## 4. Cập nhật phiên bản
 
 Sau khi sửa `Code.gs` hoặc `Admin.html`:

@@ -318,7 +318,7 @@
     }
   </style>
 </head>
-<body>
+<body data-admin-email="<?= adminEmail ?>">
   <section id="login-view" class="login-shell">
     <div class="login-card">
       <div class="brand-mark">GH</div>
@@ -623,13 +623,17 @@
       return String(error && error.message ? error.message : error).replace(/^Exception:\s*/, '');
     }
 
+    function openAuthenticatedApp(session) {
+      state.session = session;
+      $('#account-email').textContent = session.email;
+      elements.loginView.hidden = true;
+      elements.adminApp.hidden = false;
+    }
+
     async function login() {
       setLoading(true, 'Đang xác thực tài khoản Google...');
       try {
-        state.session = await runServer('apiSession');
-        $('#account-email').textContent = state.session.email;
-        elements.loginView.hidden = true;
-        elements.adminApp.hidden = false;
+        openAuthenticatedApp(await runServer('apiSession'));
         await loadPosts();
       } catch (error) {
         showToast(getErrorMessage(error), 'error');
@@ -922,6 +926,12 @@
     ['content', 'focus-keyword', 'seo-title', 'seo-description', 'featured-alt', 'featured-image'].forEach((id) => {
       $('#' + id).addEventListener('input', updateEditorMetrics);
     });
+
+    const verifiedEmail = String(document.body.dataset.adminEmail || '').trim().toLowerCase();
+    if (verifiedEmail) {
+      openAuthenticatedApp({ email: verifiedEmail, displayName: verifiedEmail.split('@')[0] });
+      loadPosts(true);
+    }
   </script>
 </body>
 </html>
