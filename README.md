@@ -17,15 +17,15 @@ Thực hiện theo [GOOGLE-SHEETS-SETUP.md](GOOGLE-SHEETS-SETUP.md). Hai file c�
 - [Code.gs](google-apps-script/Code.gs)
 - [Admin.html](google-apps-script/Admin.html)
 
-## Bản form HTML tham khảo
+## GitHub Pages
 
-Các file `index.html`, `styles.css`, `app.js` và `config.js` là bản prototype độc lập ban đầu. Có thể chạy thử giao diện đó bằng:
+`index.html` không còn chứa form công khai. Trang này chỉ là cổng đăng nhập và tự động chuyển người dùng đến Apps Script Web App được cấu hình trong `config.js`.
 
-```bash
-python3 -m http.server 4173 --directory seo-article-form
-```
+- Người chưa đăng nhập sẽ được Google yêu cầu đăng nhập theo cấu hình deployment.
+- Người đã đăng nhập nhưng không thuộc `ADMIN_EMAILS` sẽ bị `Code.gs` từ chối.
+- Các thao tác xem, tạo, sửa và xóa đều kiểm tra lại quyền ở máy chủ.
 
-Sau đó mở `http://127.0.0.1:4173`.
+`styles.css` và `app.js` được giữ lại làm mã tham khảo của prototype cũ nhưng không còn được tải bởi `index.html`.
 
 ## Các nhóm dữ liệu chính
 
