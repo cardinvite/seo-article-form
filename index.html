@@ -74,8 +74,8 @@
                   <th>Bài viết</th>
                   <th>Từ khóa chính</th>
                   <th>Trạng thái</th>
-                  <th>SEO</th>
-                  <th>Cập nhật</th>
+                  <th><button class="sort-button" type="button" data-sort="seo_score">SEO <span aria-hidden="true"></span></button></th>
+                  <th><button class="sort-button" type="button" data-sort="updated_at" aria-sort="descending">Cập nhật <span aria-hidden="true"></span></button></th>
                   <th>Thao tác</th>
                 </tr>
               </thead>
@@ -115,6 +115,20 @@
                   </div>
                   <div class="field">
                     <label for="content">Nội dung HTML <span class="required">*</span></label>
+                    <div class="editor-toolbar" role="toolbar" aria-label="Định dạng nội dung">
+                      <button type="button" data-wrap="h2" title="Tiêu đề phụ H2">H2</button>
+                      <button type="button" data-wrap="h3" title="Tiêu đề phụ H3">H3</button>
+                      <button type="button" data-wrap="p" title="Đoạn văn">P</button>
+                      <span class="toolbar-sep" aria-hidden="true"></span>
+                      <button type="button" data-wrap="strong" title="In đậm (Ctrl+B)"><b>B</b></button>
+                      <button type="button" data-wrap="em" title="In nghiêng (Ctrl+I)"><i>I</i></button>
+                      <span class="toolbar-sep" aria-hidden="true"></span>
+                      <button type="button" data-list="ul" title="Danh sách gạch đầu dòng">• Danh sách</button>
+                      <button type="button" data-list="ol" title="Danh sách đánh số">1. Danh sách</button>
+                      <span class="toolbar-sep" aria-hidden="true"></span>
+                      <button type="button" data-insert="link" title="Chèn liên kết (Ctrl+K)">🔗 Liên kết</button>
+                      <button type="button" data-insert="image" title="Chèn ảnh">🖼 Ảnh</button>
+                    </div>
                     <textarea id="content" class="content-area" name="content" required placeholder="Nhập nội dung bài viết bằng HTML..."></textarea>
                     <div class="field-help"><span>Có thể dùng H2, H3, danh sách, liên kết và hình ảnh.</span><span><strong id="word-count">0</strong> từ</span></div>
                   </div>
@@ -128,6 +142,21 @@
               <section class="panel">
                 <div class="panel-heading"><h2>Rank Math SEO</h2><p>Các trường quan trọng để tối ưu kết quả tìm kiếm.</p></div>
                 <div class="panel-body">
+                  <div class="serp-preview">
+                    <div class="serp-head">
+                      <span class="group-label">Xem trước</span>
+                      <div class="serp-device" role="group" aria-label="Thiết bị xem trước">
+                        <button class="active" type="button" data-serp-device="desktop" aria-pressed="true">Máy tính</button>
+                        <button type="button" data-serp-device="mobile" aria-pressed="false">Di động</button>
+                      </div>
+                    </div>
+                    <div id="serp-card" class="serp-card" aria-live="polite">
+                      <div class="serp-url"><span id="serp-url">https://goldhomecons.vn/</span><span class="serp-dots" aria-hidden="true">⋮</span></div>
+                      <div id="serp-title" class="serp-title"></div>
+                      <div id="serp-description" class="serp-description"></div>
+                    </div>
+                    <button id="edit-snippet" class="btn btn-primary btn-small" type="button">Chỉnh sửa đoạn trích</button>
+                  </div>
                   <div class="field">
                     <label for="focus-keyword">Từ khóa chính <span class="required">*</span></label>
                     <input id="focus-keyword" name="rank_math_focus_keyword" type="text" required placeholder="xây nhà trọn gói">
@@ -218,33 +247,14 @@
             </div>
 
             <aside class="editor-side">
-              <section class="panel sticky-actions">
-                <div class="panel-heading"><h3>Xuất bản</h3></div>
-                <div class="panel-body">
-                  <div class="field">
-                    <label for="post-status">Trạng thái</label>
-                    <select id="post-status" name="post_status">
-                      <option value="draft">Bản nháp</option>
-                      <option value="pending">Chờ duyệt</option>
-                      <option value="publish">Đã xuất bản</option>
-                    </select>
-                  </div>
-                  <div class="field"><label for="publish-at">Thời gian xuất bản</label><input id="publish-at" name="publish_at" type="datetime-local"></div>
-                  <div class="field"><label for="post-author">Tác giả</label><input id="post-author" name="post_author" type="email"></div>
-                  <div class="field">
-                    <label for="visibility">Hiển thị</label>
-                    <select id="visibility" name="visibility"><option value="public">Công khai</option><option value="password">Có mật khẩu</option><option value="private">Riêng tư</option></select>
-                  </div>
-                  <div class="field"><label for="post-password">Mật khẩu bài viết</label><input id="post-password" name="post_password" type="text"></div>
-                  <div class="field"><label class="check"><input name="sticky" type="checkbox" value="1"> Ghim bài viết</label></div>
-                  <div class="field"><label class="check"><input name="comment_status" type="checkbox" value="open" checked> Cho phép bình luận</label></div>
-                  <div class="field"><label class="check"><input name="ping_status" type="checkbox" value="open" checked> Cho phép ping/trackback</label></div>
-                  <div class="action-stack">
-                    <button id="save-button" class="btn btn-gold btn-wide" type="submit">Lưu bài viết</button>
-                    <button id="cancel-button" class="btn btn-outline btn-wide" type="button">Hủy và quay lại</button>
-                  </div>
+              <section class="panel save-bar">
+                <div class="save-state"><span id="dirty-dot" class="dirty-dot" aria-hidden="true"></span><span id="dirty-text">Chưa có thay đổi</span><kbd>Ctrl + S</kbd></div>
+                <div class="action-stack">
+                  <button id="save-button" class="btn btn-gold btn-wide" type="submit">Lưu bài viết</button>
+                  <button id="cancel-button" class="btn btn-outline btn-wide" type="button">Hủy và quay lại</button>
                 </div>
               </section>
+
 
               <section class="panel">
                 <div class="panel-heading"><h3>Điểm SEO nhanh</h3></div>
@@ -277,6 +287,32 @@
                   <input id="word-count-input" name="word_count" type="hidden" value="0">
                 </div>
               </section>
+
+              <section class="panel">
+                <button id="publish-toggle" class="panel-toggle" type="button" aria-expanded="true" aria-controls="publish-body">
+                  <h3>Xuất bản</h3><span class="chevron" aria-hidden="true"></span>
+                </button>
+                <div id="publish-body" class="panel-body">
+                  <div class="field">
+                    <label for="post-status">Trạng thái</label>
+                    <select id="post-status" name="post_status">
+                      <option value="draft">Bản nháp</option>
+                      <option value="pending">Chờ duyệt</option>
+                      <option value="publish">Đã xuất bản</option>
+                    </select>
+                  </div>
+                  <div class="field"><label for="publish-at">Thời gian xuất bản</label><input id="publish-at" name="publish_at" type="datetime-local"></div>
+                  <div class="field"><label for="post-author">Tác giả</label><input id="post-author" name="post_author" type="email"></div>
+                  <div class="field">
+                    <label for="visibility">Hiển thị</label>
+                    <select id="visibility" name="visibility"><option value="public">Công khai</option><option value="password">Có mật khẩu</option><option value="private">Riêng tư</option></select>
+                  </div>
+                  <div class="field"><label for="post-password">Mật khẩu bài viết</label><input id="post-password" name="post_password" type="text"></div>
+                  <div class="field"><label class="check"><input name="sticky" type="checkbox" value="1"> Ghim bài viết</label></div>
+                  <div class="field"><label class="check"><input name="comment_status" type="checkbox" value="open" checked> Cho phép bình luận</label></div>
+                  <div class="field"><label class="check"><input name="ping_status" type="checkbox" value="open" checked> Cho phép ping/trackback</label></div>
+                </div>
+              </section>
             </aside>
           </div>
         </form>
@@ -284,7 +320,6 @@
     </main>
   </div>
 
-  <div id="loading-overlay" class="overlay" hidden><div class="loader-card"><span class="spinner" aria-hidden="true">.</span><span id="loading-text">Đang xử lý...</span></div></div>
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="config.js"></script>

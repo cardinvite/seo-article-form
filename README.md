@@ -8,7 +8,12 @@
 - Màn hình danh sách, tìm kiếm và lọc trạng thái bài viết.
 - Tạo, sửa và xóa bài viết trong Google Sheet.
 - Form nội dung, danh mục, ảnh đại diện, Rank Math, social card và thiết lập xuất bản.
-- Tính điểm SEO trực tiếp theo 13 tiêu chí on-page, ## Cấu trúc
+- Tính điểm SEO trực tiếp theo 13 tiêu chí on-page; mục chưa đạt có gợi ý sửa và bấm vào để nhảy tới ô cần sửa. Hiển thị số từ, mật độ từ khóa và xem trước kết quả Google (máy tính/di động).
+- Thanh công cụ HTML (H2, H3, đoạn văn, đậm, nghiêng, danh sách, liên kết, ảnh); phím tắt `Ctrl+S` để lưu, `Ctrl+B`/`Ctrl+I`/`Ctrl+K` trong ô nội dung.
+- Cảnh báo khi rời trình soạn thảo hoặc đóng tab mà chưa lưu.
+- Danh sách sắp xếp theo điểm SEO hoặc ngày cập nhật; mở lại trang hiện ngay dữ liệu lần trước rồi cập nhật ngầm.
+
+## Cấu trúc
 
 - `index.html`, `app.js`, `styles.css`: giao diện quản trị chạy trên GitHub Pages.
 - `config.js`: URL Web App `/exec` và OAuth Client ID (dùng chung với `goldhome-edu-dangky`).
@@ -19,8 +24,6 @@
 Thực hiện theo [GOOGLE-SHEETS-SETUP.md](GOOGLE-SHEETS-SETUP.md).
 
 Luồng xác thực: nút Google trên `index.html` → Google ID token → `doPost` action `login` xác minh token và tab `Users` → cấp phiên HMAC 24 giờ → các action `list/get/save/delete` kiểm tra phiên và tab `Users` lần nữa.
-
-doGet()` kiểm tra admin → dashboard → API CRUD kiểm tra admin lần nữa.
 
 ## Các nhóm dữ liệu chính
 

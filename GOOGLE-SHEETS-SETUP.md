@@ -26,7 +26,8 @@ Chỉ khi chạy ở domain khác (custom domain, `http://localhost:...` để t
 4. Chọn hàm `setup`, bấm **Run** và chấp nhận quyền (Sheets, gọi URL bên ngoài để xác minh token). Hàm này:
    - tạo tab `SEO Posts` với tiêu đề cột và định dạng;
    - tạo tab `Users` và thêm tài khoản đang chạy làm `ADMIN`;
-   - tạo Script Property `SESSION_SECRET`.
+   - tạo Script Property `SESSION_SECRET`;
+   - tạo trigger `warmCache` chạy 5 phút/lần để nạp sẵn cache danh sách bài và tab `Users`.
 
 ## 3. Deploy Web App
 
@@ -49,7 +50,7 @@ Sửa trực tiếp tab `Users`, mỗi người một dòng:
 
 - Email viết thường, đúng tài khoản Google người đó đăng nhập.
 - `ADMIN`: xem, tạo, sửa, xóa bài. `EDITOR`: xem, tạo, sửa (không xóa).
-- Đặt `active` = `FALSE` để khóa ngay, kể cả khi phiên còn hạn.
+- Đặt `active` = `FALSE` để khóa, kể cả khi phiên còn hạn. Tab `Users` được cache 60 giây nên thay đổi có hiệu lực sau tối đa 1 phút.
 - Không cần deploy lại khi sửa tab `Users`.
 - Muốn đăng xuất mọi người: xóa Script Property `SESSION_SECRET` rồi chạy lại `setup()`.
 
@@ -65,6 +66,8 @@ Sau khi sửa `Code.gs`: **Deploy → Manage deployments → Edit → New versio
 
 ## Ghi chú dữ liệu
 
+- Danh sách bài được cache 5 phút. Lưu hoặc xóa qua trang quản trị cập nhật ngay; nếu sửa tay trong Sheet, bấm **Làm mới** để đọc thẳng từ Sheet.
+- Trình duyệt giữ bản sao danh sách bài của lần mở trước để hiện ngay, rồi cập nhật ngầm. Bản sao bị xóa khi đăng xuất.
 - `submission_id` là mã duy nhất dùng để xác định dòng khi sửa hoặc xóa.
 - Khi lưu, máy chủ so sánh `updated_at` lúc mở bài với giá trị hiện tại trong Sheet. Nếu người khác đã lưu hoặc xóa bài trong lúc đó, thao tác lưu bị từ chối để không ghi đè dữ liệu.
 - `created_at` được giữ nguyên khi sửa; `updated_at` và `updated_by` được cập nhật mỗi lần lưu.

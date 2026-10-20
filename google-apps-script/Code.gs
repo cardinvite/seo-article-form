@@ -16,7 +16,7 @@ const AUTH = Object.freeze({
 });
 
 // Tab Users: mỗi người một dòng. role = ADMIN (được xóa bài) hoặc EDITOR (xem, tạo, sửa).
-// Đặt active = FALSE để khóa ngay, kể cả khi phiên còn hạn.
+// Đặt active = FALSE để khóa (hiệu lực sau tối đa 60 giây do cache), kể cả khi phiên còn hạn.
 const USERS_SHEET_NAME = 'Users';
 const USER_HEADERS = Object.freeze(['email', 'name', 'role', 'active']);
 const ROLES = Object.freeze(['ADMIN', 'EDITOR']);
@@ -86,6 +86,20 @@ const DATE_FORMAT = 'yyyy-mm-dd hh:mm:ss';
 const VALID_STATUSES = Object.freeze(['draft', 'pending', 'publish']);
 const VALID_VISIBILITIES = Object.freeze(['public', 'password', 'private']);
 
+// Cache (CacheService) để mỗi request đọc Sheet ít nhất có thể. Lưu/xóa bài qua API xóa cache
+// danh sách ngay; sửa tay trong Sheet thì bấm "Làm mới" (bỏ qua cache) hoặc chờ hết hạn.
+const CACHE = Object.freeze({
+  USERS_KEY: 'users_v1',
+  USERS_SECONDS: 60,
+  POSTS_KEY: 'posts_v1',
+  POSTS_SECONDS: 300,
+  HEADERS_KEY: `headers_ok_${HEADERS.length}`,
+  HEADERS_SECONDS: 21600,
+  MAX_VALUE_LENGTH: 95000,
+});
+
+let spreadsheet_;
+
 function setup() {
   validateConfig_();
   const sheet = getOrCreateSheet_();
@@ -97,6 +111,7 @@ function setup() {
     users.appendRow([Session.getEffectiveUser().getEmail().toLowerCase(), 'Admin', 'ADMIN', true]);
   }
   sessionSecret_();
+  installWarmTrigger_();
   if (!PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID')) {
     Logger.log('Chưa có Script Property GOOGLE_CLIENT_ID — xem GOOGLE-SHEETS-SETUP.md.');
   }
@@ -124,14 +139,15 @@ function doPost(event) {
 
 function dispatch_(body, user) {
   switch (body.action) {
+    // login/me trả kèm danh sách bài để trang chỉ cần một lượt gọi khi mở.
     case 'login': {
       const session = createSession_(user.email);
-      return { me: publicUser_(user), session: session.token, sessionExpiresAt: session.expiresAt };
+      return Object.assign({ me: publicUser_(user), session: session.token, sessionExpiresAt: session.expiresAt }, cachedPosts_());
     }
     case 'me':
-      return { me: publicUser_(user) };
+      return Object.assign({ me: publicUser_(user) }, cachedPosts_());
     case 'list':
-      return listPosts_();
+      return body.force ? refreshPostsCache_() : cachedPosts_();
     case 'get':
       return getPost_(body.submission_id);
     case 'save':
@@ -146,34 +162,63 @@ function dispatch_(body, user) {
 
 function listPosts_() {
   const sheet = getReadySheet_();
-  if (sheet.getLastRow() < 2) {
-    return { posts: [], stats: { total: 0, draft: 0, pending: 0, publish: 0 } };
-  }
-
   // Chỉ đọc các cột cần cho danh sách, bỏ qua content/excerpt dài.
-  const posts = readColumns_(sheet, LIST_HEADERS)
-    .map(record => ({
-      submission_id: text_(record.submission_id),
-      post_title: text_(record.post_title),
-      post_name: text_(record.post_name),
-      rank_math_focus_keyword: text_(record.focus_keyword),
-      post_status: text_(record.post_status),
-      seo_score: Number(record.seo_score) || 0,
-      word_count: Number(record.word_count) || 0,
-      created_at: toIso_(record.created_at),
-      updated_at: toIso_(record.updated_at),
-      updated_by: text_(record.updated_by),
-    }))
+  const posts = sheet.getLastRow() < 2 ? [] : readColumns_(sheet, LIST_HEADERS)
+    .map(listItem_)
     .sort((a, b) => String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)));
+  return { posts, stats: statsOf_(posts) };
+}
 
+function listItem_(record) {
   return {
-    posts,
-    stats: posts.reduce((stats, post) => {
-      stats.total += 1;
-      if (Object.prototype.hasOwnProperty.call(stats, post.post_status)) stats[post.post_status] += 1;
-      return stats;
-    }, { total: 0, draft: 0, pending: 0, publish: 0 }),
+    submission_id: text_(record.submission_id),
+    post_title: text_(record.post_title),
+    post_name: text_(record.post_name),
+    rank_math_focus_keyword: text_(record.focus_keyword),
+    post_status: text_(record.post_status),
+    seo_score: Number(record.seo_score) || 0,
+    word_count: Number(record.word_count) || 0,
+    created_at: toIso_(record.created_at),
+    updated_at: toIso_(record.updated_at),
+    updated_by: text_(record.updated_by),
   };
+}
+
+function statsOf_(posts) {
+  return posts.reduce((stats, post) => {
+    stats.total += 1;
+    if (Object.prototype.hasOwnProperty.call(stats, post.post_status)) stats[post.post_status] += 1;
+    return stats;
+  }, { total: 0, draft: 0, pending: 0, publish: 0 });
+}
+
+function cachedPosts_() {
+  const cached = CacheService.getScriptCache().get(CACHE.POSTS_KEY);
+  if (cached) return JSON.parse(cached);
+  return refreshPostsCache_();
+}
+
+function refreshPostsCache_() {
+  const result = listPosts_();
+  const json = JSON.stringify(result);
+  // CacheService giới hạn 100KB mỗi key; danh sách quá lớn thì đọc thẳng Sheet.
+  if (json.length <= CACHE.MAX_VALUE_LENGTH) CacheService.getScriptCache().put(CACHE.POSTS_KEY, json, CACHE.POSTS_SECONDS);
+  return result;
+}
+
+function invalidatePostsCache_() {
+  CacheService.getScriptCache().remove(CACHE.POSTS_KEY);
+}
+
+// Trigger 5 phút/lần (setup() tạo): nạp sẵn cache để người mở trang không phải chờ đọc Sheet.
+function warmCache() {
+  refreshPostsCache_();
+  readUsers_(true);
+}
+
+function installWarmTrigger_() {
+  const exists = ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'warmCache');
+  if (!exists) ScriptApp.newTrigger('warmCache').timeBased().everyMinutes(5).create();
 }
 
 function getPost_(submissionId) {
@@ -194,6 +239,7 @@ function deletePost_(submissionId, userEmail) {
     if (!rowNumber) throw new Error('Không tìm thấy bài viết hoặc bài đã được xóa.');
     const title = sheet.getRange(rowNumber, HEADERS.indexOf('post_title') + 1).getDisplayValue();
     sheet.deleteRow(rowNumber);
+    invalidatePostsCache_();
     return { success: true, submission_id: submissionId, post_title: title, deleted_by: userEmail };
   } finally {
     if (lock.hasLock()) lock.releaseLock();
@@ -233,16 +279,16 @@ function savePost_(adminEmail, payload) {
     // Định dạng trước khi ghi để Sheet không tự đổi chuỗi thành số/ngày (vd: mật khẩu "0123").
     range.setNumberFormats([values.map(numberFormatFor_)]);
     range.setValues([values]);
+    invalidatePostsCache_();
 
+    // Trả về dòng danh sách để trang cập nhật tại chỗ, không phải tải lại toàn bộ.
     return {
       success: true,
       operation: existingRow ? 'updated' : 'created',
       mode: existingRow ? 'updated' : 'created',
       submission_id: submissionId,
       row: targetRow,
-      post_title: record.post_title,
-      updated_by: adminEmail,
-      updated_at: toIso_(record.updated_at),
+      post: listItem_(record),
     };
   } finally {
     if (lock.hasLock()) lock.releaseLock();
@@ -293,7 +339,7 @@ function buildRecord_(payload, submissionId, adminEmail) {
     word_count: Number(payload.word_count) || countWords_(payload.content),
     page_url: payload.page_url || '',
     client_user_agent: payload.client_user_agent || '',
-    updated_at: new Date(),
+    updated_at: new Date(Math.floor(Date.now() / 1000) * 1000),
     updated_by: adminEmail,
   };
 }
@@ -443,7 +489,7 @@ function sessionSecret_() {
   return secret;
 }
 
-// Đọc lại tab Users ở mọi request để khóa tài khoản có hiệu lực ngay.
+// Kiểm tra tab Users (qua cache 60 giây) ở mọi request, kể cả khi phiên còn hạn.
 function activeUser_(email) {
   const user = readUsers_().find(item => item.email === email);
   if (!user || !user.active) {
@@ -452,7 +498,19 @@ function activeUser_(email) {
   return user;
 }
 
-function readUsers_() {
+// Cache 60 giây: đặt active = FALSE trong Sheet có hiệu lực sau tối đa CACHE.USERS_SECONDS.
+function readUsers_(force) {
+  const cache = CacheService.getScriptCache();
+  if (!force) {
+    const cached = cache.get(CACHE.USERS_KEY);
+    if (cached) return JSON.parse(cached);
+  }
+  const users = readUsersFromSheet_();
+  cache.put(CACHE.USERS_KEY, JSON.stringify(users), CACHE.USERS_SECONDS);
+  return users;
+}
+
+function readUsersFromSheet_() {
   const sheet = getUsersSheet_();
   if (sheet.getLastRow() < 2) return [];
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, USER_HEADERS.length).getValues()
@@ -474,9 +532,14 @@ function publicUser_(user) {
   return { email: user.email, name: user.name, role: user.role };
 }
 
-function getUsersSheet_() {
+function getSpreadsheet_() {
   validateConfig_();
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  if (!spreadsheet_) spreadsheet_ = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  return spreadsheet_;
+}
+
+function getUsersSheet_() {
+  const spreadsheet = getSpreadsheet_();
   let sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(USERS_SHEET_NAME);
@@ -488,15 +551,19 @@ function getUsersSheet_() {
   return sheet;
 }
 
+// Kiểm tra header tối đa mỗi 6 giờ (cờ trong cache) thay vì ở mọi request.
 function getReadySheet_() {
-  validateConfig_();
   const sheet = getOrCreateSheet_();
-  ensureHeaders_(sheet);
+  const cache = CacheService.getScriptCache();
+  if (!cache.get(CACHE.HEADERS_KEY)) {
+    ensureHeaders_(sheet);
+    cache.put(CACHE.HEADERS_KEY, '1', CACHE.HEADERS_SECONDS);
+  }
   return sheet;
 }
 
 function getOrCreateSheet_() {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const spreadsheet = getSpreadsheet_();
   return spreadsheet.getSheetByName(CONFIG.SHEET_NAME) || spreadsheet.insertSheet(CONFIG.SHEET_NAME);
 }
 

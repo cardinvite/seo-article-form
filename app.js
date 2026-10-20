@@ -1,6 +1,16 @@
 const config = window.GOLDHOME_SEO_CONFIG || {};
 const SESSION_KEY = 'goldhome_seo_session';
-const state = { session: null, token: '', posts: [], slugTouched: false };
+// Bản sao danh sách bài lần trước để mở trang hiện ngay rồi cập nhật ngầm. Xóa khi đăng xuất.
+const SNAPSHOT_KEY = 'goldhome_seo_snapshot';
+const PUBLISH_OPEN_KEY = 'goldhome_seo_publish_open';
+const state = {
+  session: null,
+  token: '',
+  posts: [],
+  slugTouched: false,
+  dirty: false,
+  sort: { key: 'updated_at', dir: 'desc' },
+};
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -12,8 +22,7 @@ const elements = {
   tbody: $('#posts-table-body'),
   empty: $('#posts-empty'),
   form: $('#post-form'),
-  overlay: $('#loading-overlay'),
-  loadingText: $('#loading-text'),
+  content: $('#content'),
   toast: $('#toast')
 };
 
@@ -54,20 +63,21 @@ async function api(action, params = {}) {
   return body.data;
 }
 
+function readStorage(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (error) { return null; }
+}
+
+function writeStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { /* private mode / hết dung lượng */ }
+}
+
+function removeStorage(key) {
+  try { localStorage.removeItem(key); } catch (error) { /* ignore */ }
+}
+
 function loadSavedSession() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-    if (saved && saved.token && new Date(saved.expiresAt) > new Date()) return saved.token;
-  } catch (error) { /* private mode / dữ liệu hỏng */ }
-  return '';
-}
-
-function saveSession(token, expiresAt) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ token, expiresAt })); } catch (error) { /* ignore */ }
-}
-
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch (error) { /* ignore */ }
+  const saved = readStorage(SESSION_KEY);
+  return saved && saved.token && new Date(saved.expiresAt) > new Date() ? saved.token : '';
 }
 
 function setLoginStatus(message, type = '') {
@@ -76,9 +86,12 @@ function setLoginStatus(message, type = '') {
   status.className = 'login-status ' + type;
 }
 
-function setLoading(active, text = 'Đang xử lý...') {
-  elements.loadingText.textContent = text;
-  elements.overlay.hidden = !active;
+// Spinner ngay trên nút đang xử lý thay cho lớp phủ chặn cả màn hình.
+function setBusy(button, busy) {
+  if (!button) return;
+  button.disabled = busy;
+  button.classList.toggle('is-busy', busy);
+  button.setAttribute('aria-busy', String(busy));
 }
 
 let toastTimer;
@@ -121,34 +134,44 @@ function initGoogle() {
   if (!state.token) google.accounts.id.prompt();
 }
 
+// login và me trả kèm danh sách bài nên chỉ cần một lượt gọi máy chủ.
 async function loginWithGoogle(idToken) {
-  setLoginStatus('Đang đăng nhập...');
-  setLoading(true, 'Đang xác thực tài khoản Google...');
+  setLoginStatus('Đang đăng nhập...', 'busy');
   try {
     const data = await api('login', { idToken });
     state.token = data.session;
-    saveSession(data.session, data.sessionExpiresAt);
+    writeStorage(SESSION_KEY, { token: data.session, expiresAt: data.sessionExpiresAt });
     setLoginStatus('');
     openAuthenticatedApp(data.me);
-    await loadPosts();
+    applyPosts(data.posts);
   } catch (error) {
     setLoginStatus(getErrorMessage(error), 'error');
-  } finally {
-    setLoading(false);
   }
 }
 
 async function resumeSession(token) {
   state.token = token;
-  setLoading(true, 'Đang tải phiên đăng nhập...');
+  const snapshot = readStorage(SNAPSHOT_KEY);
+  const hasSnapshot = Boolean(snapshot && snapshot.me && Array.isArray(snapshot.posts));
+  if (hasSnapshot) {
+    openAuthenticatedApp(snapshot.me);
+    applyPosts(snapshot.posts, false);
+  } else {
+    setLoginStatus('Đang tải phiên đăng nhập...', 'busy');
+  }
+  setBusy($('#refresh-button'), true);
   try {
     const data = await api('me');
+    if (!state.token) return;
     openAuthenticatedApp(data.me);
-    await loadPosts();
+    applyPosts(data.posts);
+    setLoginStatus('');
   } catch (error) {
-    setLoginStatus(getErrorMessage(error), 'error');
+    if (!state.token) return; // phiên hết hạn: logout() đã hiện thông báo
+    if (hasSnapshot) showToast(`Không cập nhật được dữ liệu mới: ${getErrorMessage(error)}`, 'error');
+    else setLoginStatus(getErrorMessage(error), 'error');
   } finally {
-    setLoading(false);
+    setBusy($('#refresh-button'), false);
   }
 }
 
@@ -156,7 +179,9 @@ function logout(message = '') {
   state.token = '';
   state.session = null;
   state.posts = [];
-  clearSession();
+  setDirty(false);
+  removeStorage(SESSION_KEY);
+  removeStorage(SNAPSHOT_KEY);
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   elements.tbody.textContent = '';
   elements.editorView.hidden = true;
@@ -166,18 +191,34 @@ function logout(message = '') {
   setLoginStatus(message, message ? 'error' : '');
 }
 
-async function loadPosts(showLoader = false) {
-  if (showLoader) setLoading(true, 'Đang tải danh sách bài viết...');
+function applyPosts(posts, persist = true) {
+  state.posts = Array.isArray(posts) ? posts : [];
+  updateStats(computeStats(state.posts));
+  renderPosts();
+  if (persist && state.session) writeStorage(SNAPSHOT_KEY, { me: state.session, posts: state.posts });
+}
+
+async function loadPosts(force = false) {
+  const button = $('#refresh-button');
+  setBusy(button, true);
+  if (!state.posts.length) renderSkeleton();
   try {
-    const result = await api('list');
-    state.posts = result.posts || [];
-    updateStats(result.stats || {});
-    renderPosts();
+    const data = await api('list', force ? { force: true } : {});
+    applyPosts(data.posts);
   } catch (error) {
+    if (!state.posts.length) renderPosts();
     showToast(getErrorMessage(error), 'error');
   } finally {
-    if (showLoader) setLoading(false);
+    setBusy(button, false);
   }
+}
+
+function computeStats(posts) {
+  return posts.reduce((stats, post) => {
+    stats.total += 1;
+    if (Object.prototype.hasOwnProperty.call(stats, post.post_status)) stats[post.post_status] += 1;
+    return stats;
+  }, { total: 0, draft: 0, pending: 0, publish: 0 });
 }
 
 function updateStats(stats) {
@@ -187,29 +228,65 @@ function updateStats(stats) {
   $('#stat-published').textContent = stats.publish || 0;
 }
 
+function renderSkeleton() {
+  elements.empty.hidden = true;
+  const row = '<tr class="skeleton-row">' + '<td><span class="skeleton"></span></td>'.repeat(6) + '</tr>';
+  elements.tbody.innerHTML = row.repeat(5);
+}
+
+function sortValue(post, key) {
+  if (key === 'seo_score') return Number(post.seo_score) || 0;
+  return String(post.updated_at || post.created_at || '');
+}
+
 function renderPosts() {
   const query = normalize($('#search-input').value);
   const status = $('#status-filter').value;
-  const posts = state.posts.filter((post) => {
-    const haystack = normalize([post.post_title, post.post_name, post.rank_math_focus_keyword].join(' '));
-    return (!query || haystack.includes(query)) && (!status || post.post_status === status);
+  const { key, dir } = state.sort;
+  const direction = dir === 'asc' ? 1 : -1;
+  const posts = state.posts
+    .filter((post) => {
+      const haystack = normalize([post.post_title, post.post_name, post.rank_math_focus_keyword].join(' '));
+      return (!query || haystack.includes(query)) && (!status || post.post_status === status);
+    })
+    .sort((a, b) => {
+      const left = sortValue(a, key);
+      const right = sortValue(b, key);
+      return (left > right ? 1 : left < right ? -1 : 0) * direction;
+    });
+
+  $$('[data-sort]').forEach((button) => {
+    const active = button.dataset.sort === key;
+    button.classList.toggle('active', active);
+    if (active) button.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+    else button.removeAttribute('aria-sort');
   });
 
+  const canDelete = Boolean(state.session && state.session.role === 'ADMIN');
   elements.empty.hidden = posts.length > 0;
   elements.tbody.innerHTML = posts.map((post) => {
-    const score = Number(post.seo_score || 0);
+    const score = Math.max(0, Math.min(100, Number(post.seo_score) || 0));
     const scoreClass = score >= 80 ? 'score-good' : score >= 50 ? 'score-mid' : 'score-low';
     const safeId = escapeHtml(post.submission_id || '');
-    const canDelete = Boolean(state.session && state.session.role === 'ADMIN');
     return `<tr>
       <td><div class="post-title">${escapeHtml(post.post_title || '(Chưa có tiêu đề)')}<small>/${escapeHtml(post.post_name || '')}</small></div></td>
       <td>${escapeHtml(post.rank_math_focus_keyword || '—')}</td>
       <td><span class="badge badge-${escapeHtml(post.post_status || 'draft')}">${statusLabel(post.post_status)}</span></td>
-      <td><span class="score ${scoreClass}">${score}/100</span></td>
+      <td><div class="score-cell ${scoreClass}"><span class="score">${score}</span><span class="score-bar"><span style="width:${score}%"></span></span></div></td>
       <td>${escapeHtml(formatDate(post.updated_at || post.created_at))}</td>
       <td><div class="actions"><button class="btn btn-outline btn-small" type="button" data-edit="${safeId}">Sửa</button>${canDelete ? `<button class="btn btn-danger btn-small" type="button" data-delete="${safeId}">Xóa</button>` : ''}</div></td>
     </tr>`;
   }).join('');
+}
+
+function setDirty(dirty) {
+  state.dirty = dirty;
+  $('#dirty-dot').classList.toggle('active', dirty);
+  $('#dirty-text').textContent = dirty ? 'Có thay đổi chưa lưu' : 'Chưa có thay đổi';
+}
+
+function confirmDiscard() {
+  return !state.dirty || window.confirm('Bài viết có thay đổi chưa lưu. Rời đi và bỏ các thay đổi?');
 }
 
 function showList() {
@@ -218,12 +295,27 @@ function showList() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function leaveEditor() {
+  if (!confirmDiscard()) return;
+  setDirty(false);
+  showList();
+}
+
+function openEditor(title) {
+  $('#editor-title').textContent = title;
+  syncPasswordField();
+  updateEditorMetrics();
+  setDirty(false);
+  elements.listView.hidden = true;
+  elements.editorView.hidden = false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function newPost() {
   elements.form.reset();
   state.slugTouched = false;
   $('#submission-id').value = '';
   $('#base-updated-at').value = '';
-  $('#editor-title').textContent = 'Viết bài mới';
   $('#post-author').value = state.session ? state.session.email : '';
   $('#post-status').value = 'draft';
   $('#visibility').value = 'public';
@@ -234,54 +326,46 @@ function newPost() {
   setCheckedValues('ping_status', ['open']);
   setCheckedValues('rank_math_twitter_use_facebook', ['1']);
   $('#publish-at').value = toLocalDateTime(new Date());
-  syncPasswordField();
-  updateEditorMetrics();
-  elements.listView.hidden = true;
-  elements.editorView.hidden = false;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  openEditor('Viết bài mới');
 }
 
-async function editPost(submissionId) {
-  setLoading(true, 'Đang tải bài viết...');
+async function editPost(submissionId, button) {
+  setBusy(button, true);
   try {
     const post = await api('get', { submission_id: submissionId });
     elements.form.reset();
     fillForm(post);
     state.slugTouched = Boolean(post.post_name);
-    syncPasswordField();
-    $('#editor-title').textContent = 'Chỉnh sửa bài viết';
-    elements.listView.hidden = true;
-    elements.editorView.hidden = false;
-    updateEditorMetrics();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    openEditor('Chỉnh sửa bài viết');
   } catch (error) {
     showToast(getErrorMessage(error), 'error');
   } finally {
-    setLoading(false);
+    setBusy(button, false);
   }
 }
 
-async function deletePost(submissionId) {
+async function deletePost(submissionId, button) {
   const post = state.posts.find((item) => item.submission_id === submissionId);
   const title = post ? post.post_title : submissionId;
   if (!window.confirm(`Xóa vĩnh viễn bài “${title}” khỏi Google Sheet?`)) return;
 
-  setLoading(true, 'Đang xóa bài viết...');
+  setBusy(button, true);
   try {
     await api('delete', { submission_id: submissionId });
+    applyPosts(state.posts.filter((item) => item.submission_id !== submissionId));
     showToast('Đã xóa bài viết.');
-    await loadPosts();
   } catch (error) {
     showToast(getErrorMessage(error), 'error');
-  } finally {
-    setLoading(false);
+    setBusy(button, false);
   }
 }
 
 async function savePost(event) {
   event.preventDefault();
   if (!elements.form.reportValidity()) return;
-  setLoading(true, 'Đang lưu bài viết vào Google Sheet...');
+  const button = $('#save-button');
+  if (button.disabled) return;
+  setBusy(button, true);
   try {
     const payload = serializeForm(elements.form);
     payload.target_site = 'https://goldhomecons.vn/';
@@ -290,13 +374,16 @@ async function savePost(event) {
     payload.client_user_agent = navigator.userAgent;
     payload.submitted_at = new Date().toISOString();
     const result = await api('save', { post: payload });
+    // Máy chủ trả về dòng vừa lưu: cập nhật danh sách tại chỗ, không tải lại cả danh sách.
+    const others = state.posts.filter((item) => item.submission_id !== result.submission_id);
+    applyPosts(result.post ? [result.post, ...others] : others);
     showToast(result.mode === 'updated' ? 'Đã cập nhật bài viết.' : 'Đã tạo bài viết mới.');
-    await loadPosts();
+    setDirty(false);
     showList();
   } catch (error) {
     showToast(getErrorMessage(error), 'error');
   } finally {
-    setLoading(false);
+    setBusy(button, false);
   }
 }
 
@@ -337,18 +424,62 @@ function setCheckedValues(name, values) {
   $$(`[name="${cssEscape(name)}"]`).forEach((input) => { input.checked = values.includes(input.value); });
 }
 
+// Ô cần sửa cho từng tiêu chí: bấm vào tiêu chí chưa đạt sẽ nhảy tới đây.
+const CHECK_TARGETS = Object.freeze({
+  keyword: 'focus-keyword',
+  'title-keyword': 'post-title',
+  'seo-title': 'seo-title',
+  description: 'seo-description',
+  'description-keyword': 'seo-description',
+  slug: 'post-name',
+  'content-length': 'content',
+  'intro-keyword': 'content',
+  heading: 'content',
+  image: 'featured-image',
+  'image-alt': 'featured-alt',
+  'internal-link': 'content',
+  'external-link': 'content',
+});
+
+function lengthHint(length, min, max, emptyText) {
+  if (!length) return emptyText;
+  if (length < min) return `Đang ${length} ký tự, cần thêm ${min - length}.`;
+  return `Đang ${length} ký tự, bớt ${length - max}.`;
+}
+
+function focusField(id) {
+  const field = $('#' + id);
+  if (!field) return;
+  const details = field.closest('details');
+  if (details) details.open = true;
+  if (field.closest('#publish-body')) setPublishOpen(true);
+  field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  field.focus({ preventScroll: true });
+}
+
+let metricsFrame = 0;
+// Gộp các lần gõ phím trong cùng một khung hình thành một lần chấm điểm.
+function scheduleMetrics() {
+  if (metricsFrame) return;
+  metricsFrame = requestAnimationFrame(() => {
+    metricsFrame = 0;
+    updateEditorMetrics();
+  });
+}
+
 function updateEditorMetrics() {
   const title = $('#post-title').value.trim();
   const slug = $('#post-name').value.trim();
   const content = $('#content').value;
   const keyword = $('#focus-keyword').value.split(',')[0].trim();
-  const seoTitle = $('#seo-title').value.trim() || title;
+  const seoTitle = renderSeoVariables($('#seo-title').value.trim(), title) || title;
   const description = $('#seo-description').value.trim() || $('#post-excerpt').value.trim();
   const alt = $('#featured-alt').value.trim();
   const imageUrl = $('#featured-image').value.trim();
   const plainContent = stripHtml(content).trim();
   const wordCount = plainContent ? plainContent.split(/\s+/).filter(Boolean).length : 0;
   const firstWords = plainContent.split(/\s+/).slice(0, 160).join(' ');
+  updateSerpPreview({ slug, seoTitle, description: description || plainContent, keyword });
   const normalizedKeyword = normalize(keyword);
   const keywordSlug = slugify(keyword);
   const links = Array.from(content.matchAll(/href=["']([^"']+)["']/gi), match => match[1]);
@@ -376,12 +507,32 @@ function updateEditorMetrics() {
     'internal-link': hasInternalLink,
     'external-link': hasExternalLink
   };
+  const quotedKeyword = keyword ? `“${keyword}”` : 'từ khóa chính';
+  const hints = {
+    keyword: 'Nhập từ khóa chính để bắt đầu chấm điểm.',
+    'title-keyword': `Thêm ${quotedKeyword} vào tiêu đề bài viết.`,
+    'seo-title': lengthHint(seoTitle.length, 30, 60, 'Chưa có tiêu đề SEO.'),
+    description: lengthHint(description.length, 120, 160, 'Chưa có mô tả SEO.'),
+    'description-keyword': `Thêm ${quotedKeyword} vào mô tả SEO.`,
+    slug: !slug ? 'Chưa có slug.' : slug.length > 75 ? `Slug dài ${slug.length} ký tự, nên tối đa 75.` : `Slug nên chứa “${keywordSlug}”.`,
+    'content-length': `Đang ${wordCount} từ, cần thêm ${Math.max(0, 600 - wordCount)} từ.`,
+    'intro-keyword': `Đưa ${quotedKeyword} vào khoảng 160 từ đầu tiên.`,
+    heading: 'Thêm ít nhất một tiêu đề phụ bằng nút H2/H3.',
+    image: 'Nhập URL ảnh đại diện.',
+    'image-alt': 'Mô tả ảnh đại diện, nên chứa từ khóa.',
+    'internal-link': 'Thêm liên kết tới trang khác của goldhomecons.vn.',
+    'external-link': 'Thêm liên kết tới một nguồn uy tín bên ngoài.',
+  };
   const passed = Object.values(checks).filter(Boolean).length;
   const total = Object.keys(checks).length;
   const score = Math.round(passed / total * 100);
   Object.entries(checks).forEach(([name, pass]) => {
     const item = $(`[data-seo-check="${name}"]`);
-    if (item) item.classList.toggle('pass', pass);
+    if (!item) return;
+    item.classList.toggle('pass', pass);
+    const hint = item.querySelector('.seo-hint');
+    hint.textContent = pass ? '' : hints[name];
+    hint.hidden = pass;
   });
   $('#seo-check-count').textContent = `${passed}/${total} đạt`;
   $('#seo-score').value = score;
@@ -400,6 +551,91 @@ function updateEditorMetrics() {
   $('#keyword-density').textContent = `${density.toFixed(1).replace('.', ',')}%`;
   $('#density-bar').style.width = `${Math.min(density / 3 * 100, 100)}%`;
   $('#density-bar').style.background = density >= 0.5 && density <= 2.5 ? 'var(--success)' : density > 2.5 ? 'var(--danger)' : 'var(--warning)';
+}
+
+const SERP = Object.freeze({
+  siteUrl: 'https://goldhomecons.vn/',
+  siteName: 'Gold Home',
+  separator: '-',
+  // Google cắt tiêu đề theo độ rộng (~580px chữ Arial 20px), mô tả theo số ký tự.
+  desktop: { titleWidth: 580, titleFont: '20px Arial', descriptionLength: 160 },
+  mobile: { titleWidth: 330, titleFont: '18px Arial', descriptionLength: 120 },
+});
+let serpDevice = 'desktop';
+let measureContext;
+
+// Biến Rank Math thường dùng trong tiêu đề SEO, ví dụ "%title% %sep% %sitename%".
+function renderSeoVariables(template, title) {
+  return String(template || '')
+    .replace(/%title%/g, title)
+    .replace(/%sitename%/g, SERP.siteName)
+    .replace(/%sep%/g, SERP.separator)
+    .replace(/%currentyear%/g, String(new Date().getFullYear()))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function textWidth(text, font) {
+  measureContext = measureContext || document.createElement('canvas').getContext('2d');
+  measureContext.font = font;
+  return measureContext.measureText(text).width;
+}
+
+// Cắt ở ranh giới từ gần nhất rồi thêm "..." giống Google.
+function truncateWords(text, fits) {
+  if (fits(text)) return text;
+  const words = text.split(' ');
+  let result = '';
+  for (const word of words) {
+    const next = result ? `${result} ${word}` : word;
+    if (!fits(`${next}...`)) break;
+    result = next;
+  }
+  return `${result.replace(/[\s,.;:–-]+$/, '')}...`;
+}
+
+// Tô đậm từ khóa (không phân biệt dấu/hoa thường) bằng DOM node, không dùng innerHTML.
+function renderHighlighted(element, text, keyword) {
+  element.textContent = '';
+  const normalizedKeyword = normalize(keyword).replace(/đ/g, 'd');
+  if (!normalizedKeyword) {
+    element.textContent = text;
+    return;
+  }
+  let normalizedText = '';
+  const indexMap = [];
+  Array.from(text).forEach((char, index) => {
+    const normalizedChar = normalize(char).replace(/đ/g, 'd');
+    for (const part of normalizedChar) {
+      normalizedText += part;
+      indexMap.push(index);
+    }
+  });
+  const chars = Array.from(text);
+  let cursor = 0;
+  let found = normalizedText.indexOf(normalizedKeyword);
+  while (found >= 0) {
+    const start = indexMap[found];
+    const end = indexMap[found + normalizedKeyword.length - 1] + 1;
+    if (start > cursor) element.append(chars.slice(cursor, start).join(''));
+    const strong = document.createElement('strong');
+    strong.textContent = chars.slice(start, end).join('');
+    element.append(strong);
+    cursor = end;
+    found = normalizedText.indexOf(normalizedKeyword, found + normalizedKeyword.length);
+  }
+  if (cursor < chars.length) element.append(chars.slice(cursor).join(''));
+}
+
+function updateSerpPreview({ slug, seoTitle, description, keyword }) {
+  const device = SERP[serpDevice];
+  const title = seoTitle || 'Tiêu đề bài viết sẽ hiển thị tại đây';
+  const snippet = String(description || 'Mô tả SEO sẽ xuất hiện ở đây. Hãy viết nội dung súc tích, chứa từ khóa chính và hấp dẫn người tìm kiếm.')
+    .replace(/\s+/g, ' ').trim();
+  $('#serp-url').textContent = `${SERP.siteUrl}${slug ? `${slug}/` : ''}`;
+  renderHighlighted($('#serp-title'), truncateWords(title, (text) => textWidth(text, device.titleFont) <= device.titleWidth), keyword);
+  renderHighlighted($('#serp-description'), truncateWords(snippet, (text) => text.length <= device.descriptionLength), keyword);
+  $('#serp-card').classList.toggle('mobile', serpDevice === 'mobile');
 }
 
 function slugify(value) {
@@ -451,33 +687,130 @@ function cssEscape(value) {
   return String(value).replace(/(["\\])/g, '\\$1');
 }
 
-$('#logout-button').addEventListener('click', () => logout());
+// ---------- Thanh công cụ nội dung HTML ----------
+
+// Dùng execCommand('insertText') để Ctrl+Z hoàn tác được; trình duyệt không hỗ trợ thì ghi thẳng.
+function insertIntoContent(text, selectStart, selectEnd) {
+  const input = elements.content;
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  input.focus();
+  const inserted = document.execCommand && document.execCommand('insertText', false, text);
+  if (!inserted) {
+    input.setRangeText(text, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (selectStart !== undefined) input.setSelectionRange(start + selectStart, start + selectEnd);
+}
+
+function selectedContent(fallback) {
+  const input = elements.content;
+  return input.value.slice(input.selectionStart, input.selectionEnd) || fallback;
+}
+
+function wrapContent(tag) {
+  const selected = selectedContent('văn bản');
+  const open = `<${tag}>`;
+  insertIntoContent(`${open}${selected}</${tag}>`, open.length, open.length + selected.length);
+}
+
+// Khối (danh sách, ảnh) luôn bắt đầu ở dòng mới.
+function blockPrefix() {
+  const before = elements.content.value.slice(0, elements.content.selectionStart);
+  return before && !before.endsWith('\n') ? '\n' : '';
+}
+
+function insertList(tag) {
+  const items = selectedContent('Mục 1\nMục 2').split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  insertIntoContent(`${blockPrefix()}<${tag}>\n${items.map((item) => `  <li>${item}</li>`).join('\n')}\n</${tag}>`);
+}
+
+function askUrl(message) {
+  const url = (window.prompt(message, 'https://') || '').trim();
+  if (!url || url === 'https://') return '';
+  if (!/^(https?:\/\/|\/|#|mailto:|tel:)/i.test(url)) {
+    showToast('URL phải bắt đầu bằng https://, /, #, mailto: hoặc tel:', 'error');
+    return '';
+  }
+  return url;
+}
+
+function insertLink() {
+  const url = askUrl('Nhập URL liên kết:');
+  if (!url) return;
+  const selected = selectedContent('văn bản liên kết');
+  const open = `<a href="${escapeHtml(url)}">`;
+  insertIntoContent(`${open}${selected}</a>`, open.length, open.length + selected.length);
+}
+
+function insertImage() {
+  const url = askUrl('Nhập URL ảnh:');
+  if (!url) return;
+  const alt = (window.prompt('Mô tả ảnh (alt):', selectedContent($('#focus-keyword').value.trim())) || '').trim();
+  insertIntoContent(`${blockPrefix()}<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}">`);
+}
+
+function setPublishOpen(open) {
+  $('#publish-toggle').setAttribute('aria-expanded', String(open));
+  $('#publish-body').hidden = !open;
+  writeStorage(PUBLISH_OPEN_KEY, open);
+}
+
+// ---------- Sự kiện ----------
+
+$('#logout-button').addEventListener('click', () => {
+  if (!elements.editorView.hidden && !confirmDiscard()) return;
+  logout();
+});
 $('#new-post-button').addEventListener('click', newPost);
-$('#back-button').addEventListener('click', showList);
-$('#cancel-button').addEventListener('click', showList);
+$('#back-button').addEventListener('click', leaveEditor);
+$('#cancel-button').addEventListener('click', leaveEditor);
 $('#refresh-button').addEventListener('click', () => loadPosts(true));
 $('#search-input').addEventListener('input', renderPosts);
 $('#status-filter').addEventListener('change', renderPosts);
 $('#visibility').addEventListener('change', syncPasswordField);
+$('#publish-toggle').addEventListener('click', () => setPublishOpen($('#publish-body').hidden));
 elements.form.addEventListener('submit', savePost);
+elements.form.addEventListener('input', () => setDirty(true));
+elements.form.addEventListener('change', () => setDirty(true));
 elements.tbody.addEventListener('click', (event) => {
   const editButton = event.target.closest('[data-edit]');
   const deleteButton = event.target.closest('[data-delete]');
-  if (editButton) editPost(editButton.dataset.edit);
-  if (deleteButton) deletePost(deleteButton.dataset.delete);
+  if (editButton) editPost(editButton.dataset.edit, editButton);
+  if (deleteButton) deletePost(deleteButton.dataset.delete, deleteButton);
+});
+$$('[data-sort]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const key = button.dataset.sort;
+    state.sort = state.sort.key === key
+      ? { key, dir: state.sort.dir === 'desc' ? 'asc' : 'desc' }
+      : { key, dir: 'desc' };
+    renderPosts();
+  });
 });
 
 $('#post-title').addEventListener('input', () => {
   if (!state.slugTouched) $('#post-name').value = slugify($('#post-title').value);
-  updateEditorMetrics();
+  scheduleMetrics();
 });
 $('#post-name').addEventListener('input', () => {
   state.slugTouched = true;
   $('#post-name').value = slugify($('#post-name').value);
-  updateEditorMetrics();
+  scheduleMetrics();
+});
+$('#edit-snippet').addEventListener('click', () => focusField('seo-title'));
+$$('[data-serp-device]').forEach((button) => {
+  button.addEventListener('click', () => {
+    serpDevice = button.dataset.serpDevice;
+    $$('[data-serp-device]').forEach((item) => {
+      item.classList.toggle('active', item === button);
+      item.setAttribute('aria-pressed', String(item === button));
+    });
+    updateEditorMetrics();
+  });
 });
 ['content', 'post-excerpt', 'focus-keyword', 'seo-title', 'seo-description', 'featured-alt', 'featured-image'].forEach((id) => {
-  $('#' + id).addEventListener('input', updateEditorMetrics);
+  $('#' + id).addEventListener('input', scheduleMetrics);
 });
 $$('[data-robot-pair]').forEach((input) => {
   input.addEventListener('change', () => {
@@ -487,6 +820,50 @@ $$('[data-robot-pair]').forEach((input) => {
   });
 });
 
+$$('.editor-toolbar [data-wrap]').forEach((button) => button.addEventListener('click', () => wrapContent(button.dataset.wrap)));
+$$('.editor-toolbar [data-list]').forEach((button) => button.addEventListener('click', () => insertList(button.dataset.list)));
+$('.editor-toolbar [data-insert="link"]').addEventListener('click', insertLink);
+$('.editor-toolbar [data-insert="image"]').addEventListener('click', insertImage);
+elements.content.addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const key = event.key.toLowerCase();
+  const actions = { b: () => wrapContent('strong'), i: () => wrapContent('em'), k: insertLink };
+  if (!actions[key]) return;
+  event.preventDefault();
+  actions[key]();
+});
+
+// Tiêu chí SEO: thêm dòng gợi ý và cho phép bấm để nhảy tới ô cần sửa.
+$$('[data-seo-check]').forEach((item) => {
+  const target = CHECK_TARGETS[item.dataset.seoCheck];
+  const hint = document.createElement('small');
+  hint.className = 'seo-hint';
+  hint.hidden = true;
+  item.lastElementChild.append(hint);
+  if (!target) return;
+  item.tabIndex = 0;
+  item.setAttribute('role', 'button');
+  item.addEventListener('click', () => focusField(target));
+  item.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    focusField(target);
+  });
+});
+
+document.addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+  if (elements.editorView.hidden || elements.adminApp.hidden) return;
+  event.preventDefault();
+  elements.form.requestSubmit();
+});
+window.addEventListener('beforeunload', (event) => {
+  if (!state.dirty || elements.editorView.hidden) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
+setPublishOpen(readStorage(PUBLISH_OPEN_KEY) !== false);
 const savedToken = loadSavedSession();
 if (savedToken) resumeSession(savedToken);
 initGoogle();
