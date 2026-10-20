@@ -1,34 +1,26 @@
 # Gold Home SEO Content
 
-Ứng dụng quản lý bài viết chuẩn SEO cho `goldhomecons.vn`, dùng Google Apps Script làm Web App và Google Sheet làm nơi lưu dữ liệu.
+Ứng dụng quản lý bài viết chuẩn SEO cho `goldhomecons.vn`, giao diện chạy trên GitHub Pages, Google Apps Script làm API và Google Sheet làm nơi lưu dữ liệu.
 
 ## Chức năng
 
-- Đăng nhập bằng tài khoản Google và kiểm tra danh sách admin ở máy chủ.
+- Đăng nhập bằng nút Sign in with Google; máy chủ xác minh token và kiểm tra tab `Users` (ADMIN/EDITOR) ở mọi thao tác.
 - Màn hình danh sách, tìm kiếm và lọc trạng thái bài viết.
 - Tạo, sửa và xóa bài viết trong Google Sheet.
 - Form nội dung, danh mục, ảnh đại diện, Rank Math, social card và thiết lập xuất bản.
-- Tính điểm SEO trực tiếp theo 13 tiêu chí on-page, hiển thị từng mục đạt/chưa đạt, số từ và mật độ từ khóa ngay khi nhập.
+- Tính điểm SEO trực tiếp theo 13 tiêu chí on-page, ## Cấu trúc
 
-## Triển khai ứng dụng thật
+- `index.html`, `app.js`, `styles.css`: giao diện quản trị chạy trên GitHub Pages.
+- `config.js`: URL Web App `/exec` và OAuth Client ID (dùng chung với `goldhome-edu-dangky`).
+- [google-apps-script/Code.gs](google-apps-script/Code.gs), [appsscript.json](google-apps-script/appsscript.json): API trên Apps Script.
 
-Thực hiện theo [GOOGLE-SHEETS-SETUP.md](GOOGLE-SHEETS-SETUP.md). Hai file cần đưa vào project Apps Script là:
+## Triển khai
 
-- [Code.gs](google-apps-script/Code.gs)
-- [Admin.html](google-apps-script/Admin.html)
+Thực hiện theo [GOOGLE-SHEETS-SETUP.md](GOOGLE-SHEETS-SETUP.md).
 
-## GitHub Pages
+Luồng xác thực: nút Google trên `index.html` → Google ID token → `doPost` action `login` xác minh token và tab `Users` → cấp phiên HMAC 24 giờ → các action `list/get/save/delete` kiểm tra phiên và tab `Users` lần nữa.
 
-`index.html` không còn chứa form công khai. Trang này chỉ là cổng đăng nhập và tự động chuyển người dùng đến Apps Script Web App được cấu hình trong `config.js`.
-
-- Người chưa đăng nhập sẽ được Google yêu cầu đăng nhập theo cấu hình deployment.
-- Người đã đăng nhập nhưng không thuộc `ADMIN_EMAILS` sẽ bị `Code.gs` từ chối.
-- Các thao tác xem, tạo, sửa và xóa đều kiểm tra lại quyền ở máy chủ.
-- `Code.gs` cũng đối chiếu Active User với Effective User và từ chối nếu Web App bị deploy nhầm dưới tài khoản chủ sở hữu.
-
-Luồng xác thực: `index.html` → Google Account Chooser → `doGet()` kiểm tra admin → dashboard → API CRUD kiểm tra admin lần nữa.
-
-`styles.css` và `app.js` được giữ lại làm mã tham khảo của prototype cũ nhưng không còn được tải bởi `index.html`.
+doGet()` kiểm tra admin → dashboard → API CRUD kiểm tra admin lần nữa.
 
 ## Các nhóm dữ liệu chính
 

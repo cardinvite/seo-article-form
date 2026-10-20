@@ -4,182 +4,290 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="Cổng đăng nhập hệ thống quản lý nội dung SEO Gold Home Construction.">
-  <title>Đăng nhập — Gold Home SEO Content</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --gold: #c49a47;
-      --gold-dark: #987124;
-      --ink: #171717;
-      --muted: #6f6f6f;
-      --line: #e4dfd3;
-      --danger: #b42318;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      margin: 0;
-      padding: 24px;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at 15% 18%, rgba(196,154,71,.28), transparent 25%),
-        radial-gradient(circle at 86% 78%, rgba(196,154,71,.12), transparent 24%),
-        linear-gradient(135deg, #101010, #2c271e);
-    }
-
-    .login-card {
-      width: min(450px, 100%);
-      padding: 40px;
-      border: 1px solid rgba(255,255,255,.14);
-      border-radius: 20px;
-      background: rgba(255,255,255,.98);
-      box-shadow: 0 30px 90px rgba(0,0,0,.38);
-      text-align: center;
-    }
-
-    .brand-mark {
-      width: 60px;
-      height: 60px;
-      display: inline-grid;
-      place-items: center;
-      border-radius: 16px;
-      color: #fff;
-      background: linear-gradient(145deg, #dab965, #a67b28);
-      box-shadow: 0 12px 28px rgba(164,122,37,.3);
-      font-size: 22px;
-      font-weight: 850;
-      letter-spacing: -.04em;
-    }
-
-    h1 {
-      margin: 21px 0 8px;
-      font-size: 26px;
-      line-height: 1.25;
-      letter-spacing: -.025em;
-    }
-
-    p { margin: 0; color: var(--muted); line-height: 1.6; }
-
-    .security-note {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      margin: 24px 0;
-      padding: 12px 14px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fbfaf7;
-      text-align: left;
-      font-size: 12px;
-    }
-
-    .security-note span:first-child { color: var(--gold-dark); font-size: 16px; }
-
-    .button {
-      width: 100%;
-      min-height: 46px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      padding: 10px 18px;
-      border: 0;
-      border-radius: 9px;
-      color: #fff;
-      background: var(--ink);
-      box-shadow: 0 9px 20px rgba(0,0,0,.16);
-      font: inherit;
-      font-weight: 700;
-      text-decoration: none;
-      cursor: pointer;
-      transition: transform .15s ease, background .15s ease;
-    }
-
-    .button:hover { transform: translateY(-1px); background: #2b2b2b; }
-    .button[aria-disabled="true"] { pointer-events: none; opacity: .5; }
-
-    .status {
-      min-height: 20px;
-      margin-top: 16px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .status.error { color: var(--danger); }
-
-    .spinner {
-      width: 14px;
-      height: 14px;
-      display: inline-block;
-      border: 2px solid #cfcfcf;
-      border-top-color: var(--gold-dark);
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-      color: transparent;
-      font-size: 0;
-      vertical-align: -2px;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .allowed-label {
-      margin-top: 22px;
-      color: #919191;
-      font-size: 11px;
-    }
-
-    @media (max-width: 520px) {
-      .login-card { padding: 31px 22px; }
-      h1 { font-size: 23px; }
-    }
-  </style>
+  <!-- Phiên đăng nhập nằm trong localStorage: CSP chặn script lạ để nội dung bài viết không thể đánh cắp phiên. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; frame-src https://accounts.google.com/gsi/; connect-src 'self' https://accounts.google.com/gsi/ https://script.google.com https://script.googleusercontent.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Gold Home SEO Content</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-  <main class="login-card">
-    <div class="brand-mark" aria-hidden="true">GH</div>
-    <h1>Gold Home SEO Content</h1>
-    <p>Hệ thống quản lý nội dung dành riêng cho quản trị viên được cấp quyền.</p>
-
-    <div class="security-note">
-      <span aria-hidden="true">●</span>
-      <span>Google sẽ xác thực tài khoản. Máy chủ Apps Script tiếp tục kiểm tra email trước mọi thao tác xem, thêm, sửa hoặc xóa bài viết.</span>
+  <section id="login-view" class="login-shell">
+    <div class="login-card">
+      <div class="brand-mark">GH</div>
+      <h1>Gold Home SEO Content</h1>
+      <p>Đăng nhập bằng tài khoản Google được cấp quyền để quản lý bài viết chuẩn SEO.</p>
+      <div id="google-button" class="google-button"></div>
+      <p id="login-status" class="login-status" role="status" aria-live="polite"></p>
+      <p class="login-note">Chỉ email có trong tab Users của Google Sheet mới được truy cập. Quyền được kiểm tra trên máy chủ ở mọi thao tác.</p>
     </div>
+  </section>
 
-    <a id="login-link" class="button" href="#" aria-disabled="true">
-      Đăng nhập bằng Google
-    </a>
-    <div id="redirect-status" class="status" role="status" aria-live="polite">
-      <span class="spinner" aria-hidden="true">.</span> Đang tải cổng đăng nhập bảo mật...
-    </div>
-    <div class="allowed-label">Chỉ tài khoản quản trị đã cấu hình mới được phép truy cập.</div>
-  </main>
+  <div id="admin-app" hidden>
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="brand-mark">GH</div>
+        <div>
+          <div class="topbar-title">Gold Home SEO Content</div>
+          <div class="topbar-subtitle">goldhomecons.vn</div>
+        </div>
+      </div>
+      <div class="account">
+        <span id="account-email" class="account-email"></span>
+        <button id="logout-button" class="btn btn-outline btn-small" type="button">Đăng xuất</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section id="list-view">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">Quản lý nội dung</div>
+            <h1>Danh sách bài viết</h1>
+            <p>Tạo, kiểm tra, sửa và quản lý dữ liệu bài viết lưu trong Google Sheet.</p>
+          </div>
+          <button id="new-post-button" class="btn btn-gold" type="button">+ Viết bài mới</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat-card"><div class="stat-label">Tổng bài</div><div id="stat-total" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Bản nháp</div><div id="stat-draft" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Chờ duyệt</div><div id="stat-pending" class="stat-value">0</div></div>
+          <div class="stat-card"><div class="stat-label">Đã xuất bản</div><div id="stat-published" class="stat-value">0</div></div>
+        </div>
+
+        <div class="panel">
+          <div class="toolbar">
+            <input id="search-input" type="search" placeholder="Tìm theo tiêu đề, từ khóa, slug...">
+            <select id="status-filter" aria-label="Lọc trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="draft">Bản nháp</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="publish">Đã xuất bản</option>
+            </select>
+            <button id="refresh-button" class="btn btn-outline" type="button">Làm mới</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Bài viết</th>
+                  <th>Từ khóa chính</th>
+                  <th>Trạng thái</th>
+                  <th>SEO</th>
+                  <th>Cập nhật</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="posts-table-body"></tbody>
+            </table>
+          </div>
+          <div id="posts-empty" class="empty" hidden>Chưa có bài viết phù hợp.</div>
+        </div>
+      </section>
+
+      <section id="editor-view" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">Trình soạn thảo SEO</div>
+            <h1 id="editor-title">Viết bài mới</h1>
+            <p>Điền nội dung, metadata SEO và thiết lập xuất bản cho Gold Home.</p>
+          </div>
+          <button id="back-button" class="btn btn-outline" type="button">← Danh sách bài</button>
+        </div>
+
+        <form id="post-form">
+          <input type="hidden" name="submission_id" id="submission-id">
+          <input type="hidden" name="base_updated_at" id="base-updated-at">
+          <div class="editor-grid">
+            <div class="editor-main">
+              <section class="panel">
+                <div class="panel-heading"><h2>Nội dung bài viết</h2></div>
+                <div class="panel-body">
+                  <div class="field">
+                    <label for="post-title">Tiêu đề bài viết <span class="required">*</span></label>
+                    <input id="post-title" name="post_title" type="text" required maxlength="250" placeholder="Ví dụ: Báo giá xây nhà trọn gói mới nhất">
+                  </div>
+                  <div class="field">
+                    <label for="post-name">Đường dẫn (slug)</label>
+                    <input id="post-name" name="post_name" type="text" maxlength="220" placeholder="bao-gia-xay-nha-tron-goi">
+                    <div class="field-help"><span>https://goldhomecons.vn/<strong id="slug-preview">duong-dan-bai-viet</strong>/</span></div>
+                  </div>
+                  <div class="field">
+                    <label for="content">Nội dung HTML <span class="required">*</span></label>
+                    <textarea id="content" class="content-area" name="content" required placeholder="Nhập nội dung bài viết bằng HTML..."></textarea>
+                    <div class="field-help"><span>Có thể dùng H2, H3, danh sách, liên kết và hình ảnh.</span><span><strong id="word-count">0</strong> từ</span></div>
+                  </div>
+                  <div class="field">
+                    <label for="post-excerpt">Mô tả ngắn</label>
+                    <textarea id="post-excerpt" name="post_excerpt" maxlength="500" placeholder="Tóm tắt nội dung bài viết..."></textarea>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-heading"><h2>Rank Math SEO</h2><p>Các trường quan trọng để tối ưu kết quả tìm kiếm.</p></div>
+                <div class="panel-body">
+                  <div class="field">
+                    <label for="focus-keyword">Từ khóa chính <span class="required">*</span></label>
+                    <input id="focus-keyword" name="rank_math_focus_keyword" type="text" required placeholder="xây nhà trọn gói">
+                  </div>
+                  <div class="field">
+                    <label for="seo-title">Tiêu đề SEO</label>
+                    <input id="seo-title" name="rank_math_title" type="text" maxlength="120" placeholder="%title% %sep% Gold Home">
+                    <div class="field-help"><span>Nên chứa từ khóa chính.</span><span><strong id="seo-title-count">0</strong>/60</span></div>
+                  </div>
+                  <div class="field">
+                    <label for="seo-description">Mô tả SEO</label>
+                    <textarea id="seo-description" name="rank_math_description" maxlength="300" placeholder="Mô tả hấp dẫn để tăng tỷ lệ nhấp..."></textarea>
+                    <div class="field-help"><span>Khuyến nghị 120–160 ký tự.</span><span><strong id="seo-description-count">0</strong>/160</span></div>
+                  </div>
+                  <div class="field">
+                    <label for="canonical-url">Canonical URL</label>
+                    <input id="canonical-url" name="rank_math_canonical_url" type="url" placeholder="https://goldhomecons.vn/duong-dan/">
+                  </div>
+                  <div class="grid-2">
+                    <div class="field">
+                      <label for="schema-type">Schema</label>
+                      <select id="schema-type" name="rank_math_schema_type">
+                        <option value="Article">Article</option>
+                        <option value="BlogPosting">Blog Posting</option>
+                        <option value="Service">Service</option>
+                        <option value="FAQPage">FAQ</option>
+                        <option value="HowTo">HowTo</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <span class="group-label">Nội dung cốt lõi</span>
+                      <label class="check"><input name="rank_math_pillar_content" type="checkbox" value="1"> Đánh dấu Pillar Content</label>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <span class="group-label">Robots Meta</span>
+                    <div class="check-grid">
+                      <label class="check"><input name="rank_math_robots[]" type="checkbox" value="index" data-robot-pair="noindex"> Index</label>
+                      <label class="check"><input name="rank_math_robots[]" type="checkbox" value="follow" data-robot-pair="nofollow"> Follow</label>
+                      <label class="check"><input name="rank_math_robots[]" type="checkbox" value="noindex" data-robot-pair="index"> Noindex</label>
+                      <label class="check"><input name="rank_math_robots[]" type="checkbox" value="nofollow" data-robot-pair="follow"> Nofollow</label>
+                      <label class="check"><input name="rank_math_robots[]" type="checkbox" value="noarchive"> No archive</label>
+                      <label class="check"><input name="rank_math_robots[]" type="checkbox" value="nosnippet"> No snippet</label>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <details open>
+                  <summary>Phân loại và hình ảnh</summary>
+                  <div class="details-body">
+                    <div class="field">
+                      <span class="group-label">Danh mục</span>
+                      <div class="check-grid">
+                        <label class="check"><input name="post_category[]" type="checkbox" value="thiet-ke-kien-truc"> Thiết kế kiến trúc</label>
+                        <label class="check"><input name="post_category[]" type="checkbox" value="thi-cong-xay-dung"> Thi công xây dựng</label>
+                        <label class="check"><input name="post_category[]" type="checkbox" value="xay-nha-tron-goi"> Xây nhà trọn gói</label>
+                        <label class="check"><input name="post_category[]" type="checkbox" value="thiet-ke-noi-that"> Thiết kế nội thất</label>
+                        <label class="check"><input name="post_category[]" type="checkbox" value="kien-thuc-xay-dung"> Kiến thức xây dựng</label>
+                        <label class="check"><input name="post_category[]" type="checkbox" value="du-an"> Dự án</label>
+                      </div>
+                    </div>
+                    <div class="grid-2">
+                      <div class="field"><label for="primary-category">Danh mục chính</label><input id="primary-category" name="rank_math_primary_category" type="text" placeholder="xay-nha-tron-goi"></div>
+                      <div class="field"><label for="post-tags">Thẻ</label><input id="post-tags" name="tax_input[post_tag]" type="text" placeholder="xây nhà, báo giá, kiến trúc"></div>
+                    </div>
+                    <div class="field"><label for="featured-image">URL ảnh đại diện</label><input id="featured-image" name="featured_image_url" type="url" placeholder="https://goldhomecons.vn/wp-content/uploads/..."></div>
+                    <div class="field"><label for="featured-alt">Alt ảnh đại diện</label><input id="featured-alt" name="featured_image_alt" type="text" placeholder="Mô tả ảnh có chứa từ khóa phù hợp"></div>
+                  </div>
+                </details>
+                <details>
+                  <summary>Facebook và mạng xã hội</summary>
+                  <div class="details-body">
+                    <div class="field"><label for="facebook-title">Tiêu đề Facebook</label><input id="facebook-title" name="rank_math_facebook_title" type="text"></div>
+                    <div class="field"><label for="facebook-description">Mô tả Facebook</label><textarea id="facebook-description" name="rank_math_facebook_description"></textarea></div>
+                    <div class="field"><label for="facebook-image">Ảnh Facebook</label><input id="facebook-image" name="rank_math_facebook_image" type="url"></div>
+                    <div class="field"><label class="check"><input name="rank_math_twitter_use_facebook" type="checkbox" value="1" checked> Twitter dùng dữ liệu Facebook</label></div>
+                    <div class="grid-2">
+                      <div class="field"><label for="twitter-card">Twitter Card</label><select id="twitter-card" name="rank_math_twitter_card_type"><option value="summary_large_image">Summary Large Image</option><option value="summary">Summary</option></select></div>
+                      <div class="field"><label for="twitter-title">Tiêu đề Twitter</label><input id="twitter-title" name="rank_math_twitter_title" type="text"></div>
+                    </div>
+                    <div class="field"><label for="twitter-description">Mô tả Twitter</label><textarea id="twitter-description" name="rank_math_twitter_description"></textarea></div>
+                    <div class="field"><label for="twitter-image">Ảnh Twitter</label><input id="twitter-image" name="rank_math_twitter_image" type="url"></div>
+                  </div>
+                </details>
+              </section>
+            </div>
+
+            <aside class="editor-side">
+              <section class="panel sticky-actions">
+                <div class="panel-heading"><h3>Xuất bản</h3></div>
+                <div class="panel-body">
+                  <div class="field">
+                    <label for="post-status">Trạng thái</label>
+                    <select id="post-status" name="post_status">
+                      <option value="draft">Bản nháp</option>
+                      <option value="pending">Chờ duyệt</option>
+                      <option value="publish">Đã xuất bản</option>
+                    </select>
+                  </div>
+                  <div class="field"><label for="publish-at">Thời gian xuất bản</label><input id="publish-at" name="publish_at" type="datetime-local"></div>
+                  <div class="field"><label for="post-author">Tác giả</label><input id="post-author" name="post_author" type="email"></div>
+                  <div class="field">
+                    <label for="visibility">Hiển thị</label>
+                    <select id="visibility" name="visibility"><option value="public">Công khai</option><option value="password">Có mật khẩu</option><option value="private">Riêng tư</option></select>
+                  </div>
+                  <div class="field"><label for="post-password">Mật khẩu bài viết</label><input id="post-password" name="post_password" type="text"></div>
+                  <div class="field"><label class="check"><input name="sticky" type="checkbox" value="1"> Ghim bài viết</label></div>
+                  <div class="field"><label class="check"><input name="comment_status" type="checkbox" value="open" checked> Cho phép bình luận</label></div>
+                  <div class="field"><label class="check"><input name="ping_status" type="checkbox" value="open" checked> Cho phép ping/trackback</label></div>
+                  <div class="action-stack">
+                    <button id="save-button" class="btn btn-gold btn-wide" type="submit">Lưu bài viết</button>
+                    <button id="cancel-button" class="btn btn-outline btn-wide" type="button">Hủy và quay lại</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-heading"><h3>Điểm SEO nhanh</h3></div>
+                <div class="panel-body">
+                  <div class="seo-meter">
+                    <div id="score-ring" class="score-ring"><span id="score-value">0</span></div>
+                    <div><strong id="score-label">Cần tối ưu</strong><p>Điểm tham khảo dựa trên các trường quan trọng.</p></div>
+                  </div>
+                  <div class="seo-check-summary"><span>Tiêu chí on-page</span><span id="seo-check-count">0/13 đạt</span></div>
+                  <ul id="seo-checklist" class="seo-checklist">
+                    <li data-seo-check="keyword"><span class="seo-check-icon">.</span><span>Đã nhập từ khóa chính</span></li>
+                    <li data-seo-check="title-keyword"><span class="seo-check-icon">.</span><span>Tiêu đề bài viết chứa từ khóa</span></li>
+                    <li data-seo-check="seo-title"><span class="seo-check-icon">.</span><span>Tiêu đề SEO dài 30–60 ký tự</span></li>
+                    <li data-seo-check="description"><span class="seo-check-icon">.</span><span>Mô tả SEO dài 120–160 ký tự</span></li>
+                    <li data-seo-check="description-keyword"><span class="seo-check-icon">.</span><span>Mô tả SEO chứa từ khóa</span></li>
+                    <li data-seo-check="slug"><span class="seo-check-icon">.</span><span>Slug ngắn và chứa từ khóa</span></li>
+                    <li data-seo-check="content-length"><span class="seo-check-icon">.</span><span>Nội dung có ít nhất 600 từ</span></li>
+                    <li data-seo-check="intro-keyword"><span class="seo-check-icon">.</span><span>Từ khóa xuất hiện trong phần mở đầu</span></li>
+                    <li data-seo-check="heading"><span class="seo-check-icon">.</span><span>Nội dung có tiêu đề phụ H2/H3</span></li>
+                    <li data-seo-check="image"><span class="seo-check-icon">.</span><span>Có ảnh đại diện</span></li>
+                    <li data-seo-check="image-alt"><span class="seo-check-icon">.</span><span>Ảnh có văn bản alt</span></li>
+                    <li data-seo-check="internal-link"><span class="seo-check-icon">.</span><span>Có liên kết nội bộ</span></li>
+                    <li data-seo-check="external-link"><span class="seo-check-icon">.</span><span>Có liên kết ngoài hữu ích</span></li>
+                  </ul>
+                  <div class="density">
+                    <div class="density-head"><span>Mật độ từ khóa</span><strong id="keyword-density">0,0%</strong></div>
+                    <div class="density-track"><span id="density-bar"></span></div>
+                  </div>
+                  <input id="seo-score" name="seo_score" type="hidden" value="0">
+                  <input id="word-count-input" name="word_count" type="hidden" value="0">
+                </div>
+              </section>
+            </aside>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <div id="loading-overlay" class="overlay" hidden><div class="loader-card"><span class="spinner" aria-hidden="true">.</span><span id="loading-text">Đang xử lý...</span></div></div>
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="config.js"></script>
-  <script>
-    (function () {
-      const link = document.querySelector('#login-link');
-      const status = document.querySelector('#redirect-status');
-      const config = window.GOLDHOME_SEO_CONFIG || {};
-      const appUrl = String(config.appsScriptUrl || '').trim();
-      const validUrl = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec(?:[?#].*)?$/.test(appUrl);
-
-      if (!validUrl) {
-        status.textContent = 'Chưa cấu hình URL Google Apps Script Web App hợp lệ.';
-        status.classList.add('error');
-        return;
-      }
-
-      const loginUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
-      link.href = loginUrl;
-      link.removeAttribute('aria-disabled');
-      status.textContent = 'Hãy chọn đúng tài khoản Google đã được cấp quyền.';
-    }());
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>

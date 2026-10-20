@@ -1,15 +1,37 @@
 const CONFIG = Object.freeze({
   // Lấy phần nằm giữa /d/ và /edit trong URL Google Sheet.
-  SPREADSHEET_ID: 'PASTE_GOOGLE_SHEET_ID_HERE',
+  SPREADSHEET_ID: '1w9xGZOy5ckw6N0cNAlDM6a46t-SpfBxh0FOMUXMpiJ0',
   SHEET_NAME: 'SEO Posts',
   TIME_ZONE: 'Asia/Ho_Chi_Minh',
   MAX_CELL_LENGTH: 45000,
 });
 
-const ADMIN_EMAILS = Object.freeze([
-  'dannguyen22993@gmail.com',
-  'thanhdieuhr211@gmail.com',
-  'nguyenthienhoang0412000@gmail.com',
+// Đăng nhập giống repo goldhome-edu-dangky: nút "Sign in with Google" trên GitHub Pages lấy
+// Google ID token, máy chủ xác minh token rồi cấp phiên HMAC riêng. Web App chạy "Execute as: Me".
+// Script Properties: GOOGLE_CLIENT_ID (bắt buộc), SESSION_SECRET (tự tạo khi chạy setup()).
+const AUTH = Object.freeze({
+  SESSION_HOURS: 24,
+  MAX_BODY_LENGTH: 500000,
+  TOKEN_ISSUERS: ['accounts.google.com', 'https://accounts.google.com'],
+});
+
+// Tab Users: mỗi người một dòng. role = ADMIN (được xóa bài) hoặc EDITOR (xem, tạo, sửa).
+// Đặt active = FALSE để khóa ngay, kể cả khi phiên còn hạn.
+const USERS_SHEET_NAME = 'Users';
+const USER_HEADERS = Object.freeze(['email', 'name', 'role', 'active']);
+const ROLES = Object.freeze(['ADMIN', 'EDITOR']);
+
+const LIST_HEADERS = Object.freeze([
+  'submission_id',
+  'created_at',
+  'post_title',
+  'post_name',
+  'focus_keyword',
+  'post_status',
+  'seo_score',
+  'word_count',
+  'updated_at',
+  'updated_by',
 ]);
 
 const HEADERS = Object.freeze([
@@ -59,68 +81,88 @@ const HEADERS = Object.freeze([
   'updated_by',
 ]);
 
+const DATE_HEADERS = Object.freeze(['created_at', 'submitted_at', 'publish_at', 'updated_at']);
+const DATE_FORMAT = 'yyyy-mm-dd hh:mm:ss';
+const VALID_STATUSES = Object.freeze(['draft', 'pending', 'publish']);
+const VALID_VISIBILITIES = Object.freeze(['public', 'password', 'private']);
+
 function setup() {
   validateConfig_();
   const sheet = getOrCreateSheet_();
   ensureHeaders_(sheet);
   formatSheet_(sheet);
+
+  const users = getUsersSheet_();
+  if (users.getLastRow() < 2) {
+    users.appendRow([Session.getEffectiveUser().getEmail().toLowerCase(), 'Admin', 'ADMIN', true]);
+  }
+  sessionSecret_();
+  if (!PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID')) {
+    Logger.log('Chưa có Script Property GOOGLE_CLIENT_ID — xem GOOGLE-SHEETS-SETUP.md.');
+  }
   return `Đã sẵn sàng: ${sheet.getParent().getUrl()}#gid=${sheet.getSheetId()}`;
 }
 
 function doGet() {
-  validateConfig_();
-  let admin;
-  try {
-    admin = requireAdmin_();
-  } catch (error) {
-    return accessDenied_(error.message);
-  }
-
-  const template = HtmlService.createTemplateFromFile('Admin');
-  template.appTitle = 'Gold Home SEO Studio';
-  template.adminEmail = admin.email;
-  return template
-    .evaluate()
-    .setTitle('Gold Home SEO Studio')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return json_({ ok: true, data: { service: 'Gold Home SEO API', message: 'Mở trang quản trị trên GitHub Pages để sử dụng.' } });
 }
 
+// Trang quản trị gửi JSON với Content-Type text/plain để tránh CORS preflight (Apps Script không xử lý OPTIONS).
 function doPost(event) {
-  const admin = requireAdmin_();
-  const payload = parsePayload_(event);
-  return json_(savePost_(admin.email, payload));
+  try {
+    const body = parseBody_(event);
+    const user = body.action === 'login'
+      ? activeUser_(verifyIdToken_(body.idToken))
+      : activeUser_(verifySession_(body.token));
+    return json_({ ok: true, data: dispatch_(body, user) });
+  } catch (error) {
+    if (error instanceof ApiError) return json_({ ok: false, code: error.code, message: error.message });
+    console.error(error && error.stack ? error.stack : error);
+    return json_({ ok: false, code: 'ERROR', message: String(error && error.message ? error.message : error) });
+  }
 }
 
-function apiSession() {
-  const admin = requireAdmin_();
-  return {
-    success: true,
-    email: admin.email,
-    displayName: admin.email.split('@')[0],
-  };
+function dispatch_(body, user) {
+  switch (body.action) {
+    case 'login': {
+      const session = createSession_(user.email);
+      return { me: publicUser_(user), session: session.token, sessionExpiresAt: session.expiresAt };
+    }
+    case 'me':
+      return { me: publicUser_(user) };
+    case 'list':
+      return listPosts_();
+    case 'get':
+      return getPost_(body.submission_id);
+    case 'save':
+      return savePost_(user.email, body.post || {});
+    case 'delete':
+      if (user.role !== 'ADMIN') throw new ApiError('FORBIDDEN', 'Chỉ ADMIN được xóa bài viết.');
+      return deletePost_(body.submission_id, user.email);
+    default:
+      throw new ApiError('BAD_REQUEST', 'Thao tác không hợp lệ.');
+  }
 }
 
-function apiListPosts() {
-  requireAdmin_();
+function listPosts_() {
   const sheet = getReadySheet_();
   if (sheet.getLastRow() < 2) {
     return { posts: [], stats: { total: 0, draft: 0, pending: 0, publish: 0 } };
   }
 
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, HEADERS.length).getValues();
-  const posts = rows
-    .map(row => recordFromRow_(row))
+  // Chỉ đọc các cột cần cho danh sách, bỏ qua content/excerpt dài.
+  const posts = readColumns_(sheet, LIST_HEADERS)
     .map(record => ({
-      submission_id: record.submission_id,
-      post_title: record.post_title,
-      post_name: record.post_name,
-      rank_math_focus_keyword: record.focus_keyword,
-      post_status: record.post_status,
+      submission_id: text_(record.submission_id),
+      post_title: text_(record.post_title),
+      post_name: text_(record.post_name),
+      rank_math_focus_keyword: text_(record.focus_keyword),
+      post_status: text_(record.post_status),
       seo_score: Number(record.seo_score) || 0,
       word_count: Number(record.word_count) || 0,
       created_at: toIso_(record.created_at),
       updated_at: toIso_(record.updated_at),
-      updated_by: record.updated_by || '',
+      updated_by: text_(record.updated_by),
     }))
     .sort((a, b) => String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)));
 
@@ -134,8 +176,7 @@ function apiListPosts() {
   };
 }
 
-function apiGetPost(submissionId) {
-  requireAdmin_();
+function getPost_(submissionId) {
   const sheet = getReadySheet_();
   const rowNumber = findSubmissionRow_(sheet, String(submissionId || ''));
   if (!rowNumber) throw new Error('Không tìm thấy bài viết.');
@@ -143,13 +184,7 @@ function apiGetPost(submissionId) {
   return payloadFromRecord_(recordFromRow_(row));
 }
 
-function apiSavePost(payload) {
-  const admin = requireAdmin_();
-  return savePost_(admin.email, payload || {});
-}
-
-function apiDeletePost(submissionId) {
-  const admin = requireAdmin_();
+function deletePost_(submissionId, userEmail) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
@@ -159,14 +194,13 @@ function apiDeletePost(submissionId) {
     if (!rowNumber) throw new Error('Không tìm thấy bài viết hoặc bài đã được xóa.');
     const title = sheet.getRange(rowNumber, HEADERS.indexOf('post_title') + 1).getDisplayValue();
     sheet.deleteRow(rowNumber);
-    return { success: true, submission_id: submissionId, post_title: title, deleted_by: admin.email };
+    return { success: true, submission_id: submissionId, post_title: title, deleted_by: userEmail };
   } finally {
     if (lock.hasLock()) lock.releaseLock();
   }
 }
 
 function savePost_(adminEmail, payload) {
-  if (payload._gotcha) return { success: true, ignored: true };
   validatePayload_(payload);
 
   const lock = LockService.getScriptLock();
@@ -174,30 +208,41 @@ function savePost_(adminEmail, payload) {
 
   try {
     const sheet = getReadySheet_();
-    const submissionId = String(payload.submission_id || Utilities.getUuid());
-    const existingRow = findSubmissionRow_(sheet, submissionId);
+    const isUpdate = Boolean(String(payload.submission_id || '').trim());
+    const submissionId = isUpdate ? String(payload.submission_id).trim() : Utilities.getUuid();
+    const existingRow = isUpdate ? findSubmissionRow_(sheet, submissionId) : 0;
+    if (isUpdate && !existingRow) {
+      throw new Error('Bài viết đã bị xóa bởi quản trị viên khác. Hãy sao chép nội dung cần giữ rồi tạo bài mới.');
+    }
     const existingRecord = existingRow
       ? recordFromRow_(sheet.getRange(existingRow, 1, 1, HEADERS.length).getValues()[0])
       : null;
+    if (existingRecord && toIso_(existingRecord.updated_at) !== String(payload.base_updated_at || '')) {
+      const editor = text_(existingRecord.updated_by) || 'quản trị viên khác';
+      throw new Error(`Bài viết vừa được ${editor} cập nhật. Hãy tải lại bài trước khi lưu để không ghi đè thay đổi của họ.`);
+    }
     const record = buildRecord_(payload, submissionId, adminEmail);
 
     if (existingRecord && existingRecord.created_at) record.created_at = existingRecord.created_at;
+    validateRecordLengths_(record);
     const values = HEADERS.map(header => safeCell_(record[header]));
+    const targetRow = existingRow || sheet.getLastRow() + 1;
+    if (targetRow > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 1);
+    const range = sheet.getRange(targetRow, 1, 1, HEADERS.length);
 
-    if (existingRow) {
-      sheet.getRange(existingRow, 1, 1, HEADERS.length).setValues([values]);
-    } else {
-      sheet.appendRow(values);
-    }
+    // Định dạng trước khi ghi để Sheet không tự đổi chuỗi thành số/ngày (vd: mật khẩu "0123").
+    range.setNumberFormats([values.map(numberFormatFor_)]);
+    range.setValues([values]);
 
     return {
       success: true,
       operation: existingRow ? 'updated' : 'created',
       mode: existingRow ? 'updated' : 'created',
       submission_id: submissionId,
-      row: existingRow || sheet.getLastRow(),
+      row: targetRow,
       post_title: record.post_title,
       updated_by: adminEmail,
+      updated_at: toIso_(record.updated_at),
     };
   } finally {
     if (lock.hasLock()) lock.releaseLock();
@@ -240,11 +285,11 @@ function buildRecord_(payload, submissionId, adminEmail) {
     publish_at: toDate_(payload.publish_at),
     post_author: payload.post_author || adminEmail,
     visibility: payload.visibility || 'public',
-    post_password: payload.post_password || '',
+    post_password: payload.visibility === 'password' ? payload.post_password || '' : '',
     sticky: toBoolean_(payload.sticky),
     comment_status: payload.comment_status || 'closed',
     ping_status: payload.ping_status || 'closed',
-    seo_score: Number(payload.seo_score) || 0,
+    seo_score: Math.min(100, Math.max(0, Math.round(Number(payload.seo_score) || 0))),
     word_count: Number(payload.word_count) || countWords_(payload.content),
     page_url: payload.page_url || '',
     client_user_agent: payload.client_user_agent || '',
@@ -255,85 +300,192 @@ function buildRecord_(payload, submissionId, adminEmail) {
 
 function payloadFromRecord_(record) {
   return {
-    submission_id: record.submission_id || '',
-    post_title: record.post_title || '',
-    post_name: record.post_name || '',
-    content: record.content || '',
-    post_excerpt: record.post_excerpt || '',
-    'post_category[]': splitValue_(record.categories),
-    rank_math_primary_category: record.primary_category || '',
-    'tax_input[post_tag]': record.tags || '',
-    featured_image_url: record.featured_image_url || '',
-    featured_image_alt: record.featured_image_alt || '',
-    rank_math_focus_keyword: record.focus_keyword || '',
-    rank_math_title: record.seo_title || '',
-    rank_math_description: record.seo_description || '',
-    rank_math_canonical_url: record.canonical_url || '',
-    'rank_math_robots[]': splitValue_(record.robots),
-    rank_math_schema_type: record.schema_type || 'BlogPosting',
-    rank_math_pillar_content: record.pillar_content ? '1' : '',
-    rank_math_facebook_title: record.facebook_title || '',
-    rank_math_facebook_description: record.facebook_description || '',
-    rank_math_facebook_image: record.facebook_image || '',
-    rank_math_twitter_card_type: record.twitter_card_type || 'summary_large_image',
-    rank_math_twitter_use_facebook: record.twitter_use_facebook ? '1' : '',
-    rank_math_twitter_title: record.twitter_title || '',
-    rank_math_twitter_description: record.twitter_description || '',
-    rank_math_twitter_image: record.twitter_image || '',
-    post_status: record.post_status || 'draft',
+    submission_id: text_(record.submission_id),
+    post_title: text_(record.post_title),
+    post_name: text_(record.post_name),
+    content: text_(record.content),
+    post_excerpt: text_(record.post_excerpt),
+    'post_category[]': splitValue_(text_(record.categories)),
+    rank_math_primary_category: text_(record.primary_category),
+    'tax_input[post_tag]': text_(record.tags),
+    featured_image_url: text_(record.featured_image_url),
+    featured_image_alt: text_(record.featured_image_alt),
+    rank_math_focus_keyword: text_(record.focus_keyword),
+    rank_math_title: text_(record.seo_title),
+    rank_math_description: text_(record.seo_description),
+    rank_math_canonical_url: text_(record.canonical_url),
+    'rank_math_robots[]': splitValue_(text_(record.robots)),
+    rank_math_schema_type: text_(record.schema_type) || 'BlogPosting',
+    rank_math_pillar_content: toBoolean_(record.pillar_content) ? '1' : '',
+    rank_math_facebook_title: text_(record.facebook_title),
+    rank_math_facebook_description: text_(record.facebook_description),
+    rank_math_facebook_image: text_(record.facebook_image),
+    rank_math_twitter_card_type: text_(record.twitter_card_type) || 'summary_large_image',
+    rank_math_twitter_use_facebook: toBoolean_(record.twitter_use_facebook) ? '1' : '',
+    rank_math_twitter_title: text_(record.twitter_title),
+    rank_math_twitter_description: text_(record.twitter_description),
+    rank_math_twitter_image: text_(record.twitter_image),
+    post_status: text_(record.post_status) || 'draft',
     publish_at: toLocalInput_(record.publish_at),
-    post_author: record.post_author || '',
-    visibility: record.visibility || 'public',
-    post_password: record.post_password || '',
-    sticky: record.sticky ? '1' : '',
-    comment_status: record.comment_status || 'closed',
-    ping_status: record.ping_status || 'closed',
+    post_author: text_(record.post_author),
+    visibility: text_(record.visibility) || 'public',
+    post_password: text_(record.post_password),
+    sticky: toBoolean_(record.sticky) ? '1' : '',
+    comment_status: text_(record.comment_status) || 'closed',
+    ping_status: text_(record.ping_status) || 'closed',
     seo_score: Number(record.seo_score) || 0,
     word_count: Number(record.word_count) || 0,
     created_at: toIso_(record.created_at),
     updated_at: toIso_(record.updated_at),
-    updated_by: record.updated_by || '',
+    base_updated_at: toIso_(record.updated_at),
+    updated_by: text_(record.updated_by),
   };
 }
 
-function requireAdmin_() {
-  const email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
-  const effectiveEmail = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
-  if (!email) {
-    throw new Error('Không xác định được tài khoản Google. Hãy đăng nhập và triển khai Web App với Execute as: User accessing the web app.');
+function ApiError(code, message) {
+  this.name = 'ApiError';
+  this.code = code;
+  this.message = message;
+}
+ApiError.prototype = Object.create(Error.prototype);
+ApiError.prototype.constructor = ApiError;
+
+function parseBody_(event) {
+  const raw = event && event.postData ? String(event.postData.contents || '') : '';
+  if (!raw) throw new ApiError('BAD_REQUEST', 'Request body trống.');
+  if (raw.length > AUTH.MAX_BODY_LENGTH) throw new ApiError('BAD_REQUEST', 'Dữ liệu gửi lên quá lớn.');
+  let body;
+  try {
+    body = JSON.parse(raw);
+  } catch (error) {
+    throw new ApiError('BAD_REQUEST', 'Dữ liệu gửi lên không phải JSON hợp lệ.');
   }
-  if (!effectiveEmail || effectiveEmail !== email) {
-    throw new Error('Web App đang triển khai sai chế độ. Hãy chọn Execute as: User accessing the web app.');
-  }
-  if (!ADMIN_EMAILS.includes(email)) {
-    throw new Error(`Tài khoản ${email} không có quyền truy cập.`);
-  }
-  return { email };
+  if (!body || typeof body.action !== 'string') throw new ApiError('BAD_REQUEST', 'Thiếu thao tác.');
+  return body;
 }
 
-function accessDenied_(message) {
-  const appUrl = ScriptApp.getService().getUrl() || '';
-  const switchUrl = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(appUrl)}`;
-  const safeMessage = escapeHtml_(message || 'Tài khoản không có quyền truy cập.');
-  const safeSwitchUrl = escapeHtml_(switchUrl);
-  const html = `<!doctype html>
-    <html lang="vi"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Không có quyền truy cập</title><style>
-    *{box-sizing:border-box}body{min-height:100vh;display:grid;place-items:center;margin:0;padding:24px;background:#171717;color:#171717;font-family:Arial,sans-serif}.card{width:min(460px,100%);padding:36px;border-radius:16px;background:#fff;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.35)}.mark{width:54px;height:54px;display:grid;place-items:center;margin:auto;border-radius:14px;background:#c49a47;color:#fff;font-weight:800}h1{margin:18px 0 8px;font-size:24px}p{margin:0 0 22px;color:#666;line-height:1.55}.button{display:inline-flex;min-height:42px;align-items:center;justify-content:center;padding:9px 16px;border-radius:8px;background:#171717;color:#fff;text-decoration:none;font-weight:700}
-    </style></head><body><main class="card"><div class="mark">GH</div><h1>Không có quyền truy cập</h1><p>${safeMessage}</p><a class="button" href="${safeSwitchUrl}">Chọn tài khoản Google khác</a></main></body></html>`;
-  return HtmlService.createHtmlOutput(html)
-    .setTitle('Không có quyền truy cập')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+// Xác minh Google ID token từ nút "Sign in with Google"; kết quả cache theo token (tối đa 10 phút).
+function verifyIdToken_(idToken) {
+  if (!idToken) throw new ApiError('AUTH', 'Vui lòng đăng nhập.');
+  const clientId = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID');
+  if (!clientId) throw new ApiError('CONFIG', 'Chưa cấu hình GOOGLE_CLIENT_ID trong Script Properties.');
+
+  const cache = CacheService.getScriptCache();
+  const key = 'tok_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(idToken))).slice(0, 43);
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const response = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo', {
+    method: 'post',
+    payload: { id_token: String(idToken) },
+    muteHttpExceptions: true,
+  });
+  if (response.getResponseCode() !== 200) {
+    throw new ApiError('AUTH', 'Phiên đăng nhập Google đã hết hạn, vui lòng đăng nhập lại.');
+  }
+  const info = JSON.parse(response.getContentText());
+  if (info.aud !== clientId) throw new ApiError('AUTH', 'Token không dành cho ứng dụng này.');
+  if (!AUTH.TOKEN_ISSUERS.includes(info.iss)) throw new ApiError('AUTH', 'Token không do Google phát hành.');
+  if (String(info.email_verified) !== 'true') throw new ApiError('AUTH', 'Email Google chưa được xác minh.');
+
+  const email = String(info.email || '').trim().toLowerCase();
+  if (!email) throw new ApiError('AUTH', 'Token không có email.');
+  const ttl = Math.min(600, Number(info.exp) - Math.floor(Date.now() / 1000));
+  if (ttl > 30) cache.put(key, email, ttl);
+  return email;
 }
 
-function escapeHtml_(value) {
-  return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[character]);
+// Phiên dạng "<payload>.<chữ ký HMAC>", payload = {e: email, x: hạn (ms)}.
+// Không lưu phiên ở đâu cả; đổi SESSION_SECRET là mọi phiên cũ mất hiệu lực.
+function createSession_(email) {
+  const expiresAt = Date.now() + AUTH.SESSION_HOURS * 3600 * 1000;
+  const payload = Utilities.base64EncodeWebSafe(JSON.stringify({ e: email, x: expiresAt }), Utilities.Charset.UTF_8);
+  return { token: `${payload}.${signSession_(payload)}`, expiresAt: new Date(expiresAt).toISOString() };
+}
+
+function verifySession_(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length !== 2 || !parts[0] || !safeEqual_(parts[1], signSession_(parts[0]))) {
+    throw new ApiError('AUTH', 'Vui lòng đăng nhập.');
+  }
+  let data;
+  try {
+    data = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString('UTF-8'));
+  } catch (error) {
+    throw new ApiError('AUTH', 'Vui lòng đăng nhập.');
+  }
+  if (!data.e || !(data.x > Date.now())) {
+    throw new ApiError('AUTH', 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
+  }
+  return data.e;
+}
+
+function signSession_(payload) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, sessionSecret_()));
+}
+
+// So sánh không dừng sớm để không lộ chữ ký qua thời gian phản hồi.
+function safeEqual_(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function sessionSecret_() {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty('SESSION_SECRET');
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('SESSION_SECRET', secret);
+  }
+  return secret;
+}
+
+// Đọc lại tab Users ở mọi request để khóa tài khoản có hiệu lực ngay.
+function activeUser_(email) {
+  const user = readUsers_().find(item => item.email === email);
+  if (!user || !user.active) {
+    throw new ApiError('NOT_ALLOWED', `Tài khoản ${email} chưa được cấp quyền. Liên hệ ADMIN.`);
+  }
+  return user;
+}
+
+function readUsers_() {
+  const sheet = getUsersSheet_();
+  if (sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, USER_HEADERS.length).getValues()
+    .map(([email, name, role, active]) => {
+      const normalizedEmail = text_(email).trim().toLowerCase();
+      const normalizedRole = text_(role).trim().toUpperCase();
+      const activeText = text_(active).trim().toLowerCase();
+      return {
+        email: normalizedEmail,
+        name: text_(name).trim() || normalizedEmail,
+        role: ROLES.includes(normalizedRole) ? normalizedRole : 'EDITOR',
+        active: activeText !== 'false' && activeText !== '0',
+      };
+    })
+    .filter(user => user.email);
+}
+
+function publicUser_(user) {
+  return { email: user.email, name: user.name, role: user.role };
+}
+
+function getUsersSheet_() {
+  validateConfig_();
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  let sheet = spreadsheet.getSheetByName(USERS_SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(USERS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, USER_HEADERS.length).setValues([USER_HEADERS])
+      .setBackground('#171717').setFontColor('#FFC31A').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.getRange('A:B').setNumberFormat('@');
+  }
+  return sheet;
 }
 
 function getReadySheet_() {
@@ -381,9 +533,10 @@ function formatSheet_(sheet) {
   sheet.setColumnWidth(9, 320);
   sheet.setColumnWidth(17, 280);
   sheet.setColumnWidth(18, 360);
-  sheet.getRange('B:C').setNumberFormat('yyyy-mm-dd hh:mm:ss');
-  sheet.getRange('AF:AF').setNumberFormat('yyyy-mm-dd hh:mm:ss');
-  sheet.getRange('AQ:AQ').setNumberFormat('yyyy-mm-dd hh:mm:ss');
+  if (sheet.getMaxRows() > 1) {
+    const dataRows = sheet.getRange(2, 1, sheet.getMaxRows() - 1, HEADERS.length);
+    dataRows.setNumberFormats(Array.from({ length: dataRows.getNumRows() }, () => HEADERS.map(columnFormatFor_)));
+  }
 
   const filter = sheet.getFilter();
   if (filter && filter.getRange().getNumColumns() !== HEADERS.length) filter.remove();
@@ -402,6 +555,25 @@ function findSubmissionRow_(sheet, submissionId) {
   return match ? match.getRow() : 0;
 }
 
+function readColumns_(sheet, headers) {
+  const rowCount = sheet.getLastRow() - 1;
+  const indexes = headers.map(header => HEADERS.indexOf(header)).sort((a, b) => a - b);
+  const records = Array.from({ length: rowCount }, () => ({}));
+
+  // Gom các cột liền nhau thành một lần đọc để giảm số lần gọi Sheet.
+  for (let start = 0; start < indexes.length;) {
+    let end = start;
+    while (end + 1 < indexes.length && indexes[end + 1] === indexes[end] + 1) end += 1;
+    const firstColumn = indexes[start];
+    const values = sheet.getRange(2, firstColumn + 1, rowCount, indexes[end] - firstColumn + 1).getValues();
+    values.forEach((row, rowIndex) => {
+      row.forEach((value, offset) => { records[rowIndex][HEADERS[firstColumn + offset]] = value; });
+    });
+    start = end + 1;
+  }
+  return records;
+}
+
 function recordFromRow_(row) {
   return HEADERS.reduce((record, header, index) => {
     record[header] = row[index];
@@ -409,20 +581,35 @@ function recordFromRow_(row) {
   }, {});
 }
 
-function parsePayload_(event) {
-  if (!event || !event.postData || !event.postData.contents) throw new Error('Request body trống.');
-  if (event.postData.contents.length > 500000) throw new Error('Payload vượt quá giới hạn 500 KB.');
-  try {
-    return JSON.parse(event.postData.contents);
-  } catch (error) {
-    throw new Error('Payload không phải JSON hợp lệ.');
-  }
-}
-
 function validatePayload_(payload) {
   const required = ['post_title', 'content', 'rank_math_focus_keyword'];
   const missing = required.filter(key => !String(payload[key] || '').trim());
   if (missing.length) throw new Error(`Thiếu trường bắt buộc: ${missing.join(', ')}`);
+  if (payload.post_status && !VALID_STATUSES.includes(payload.post_status)) {
+    throw new Error('Trạng thái bài viết không hợp lệ.');
+  }
+  if (payload.visibility && !VALID_VISIBILITIES.includes(payload.visibility)) {
+    throw new Error('Chế độ hiển thị không hợp lệ.');
+  }
+
+  const robots = splitValue_(payload['rank_math_robots[]']).map(value => value.toLowerCase());
+  if (robots.includes('index') && robots.includes('noindex')) {
+    throw new Error('Robots Meta không thể đồng thời chọn index và noindex.');
+  }
+  if (robots.includes('follow') && robots.includes('nofollow')) {
+    throw new Error('Robots Meta không thể đồng thời chọn follow và nofollow.');
+  }
+}
+
+function validateRecordLengths_(record) {
+  const oversized = HEADERS.filter(header => {
+    const value = record[header];
+    return !(value instanceof Date) && typeof value !== 'number' && typeof value !== 'boolean'
+      && String(value == null ? '' : value).length > CONFIG.MAX_CELL_LENGTH;
+  });
+  if (oversized.length) {
+    throw new Error(`Dữ liệu vượt quá ${CONFIG.MAX_CELL_LENGTH.toLocaleString('vi-VN')} ký tự ở trường: ${oversized.join(', ')}.`);
+  }
 }
 
 function validateConfig_() {
@@ -473,6 +660,23 @@ function safeCell_(value) {
   let text = String(value == null ? '' : value).slice(0, CONFIG.MAX_CELL_LENGTH);
   if (/^[=+\-@]/.test(text)) text = `'${text}`;
   return text;
+}
+
+function text_(value) {
+  if (value instanceof Date) return Utilities.formatDate(value, CONFIG.TIME_ZONE, 'yyyy-MM-dd HH:mm:ss');
+  return value == null ? '' : String(value);
+}
+
+function columnFormatFor_(header) {
+  if (DATE_HEADERS.includes(header)) return DATE_FORMAT;
+  if (header === 'seo_score' || header === 'word_count') return '0';
+  return '@';
+}
+
+function numberFormatFor_(value) {
+  if (value instanceof Date) return DATE_FORMAT;
+  if (typeof value === 'number' || typeof value === 'boolean') return '0';
+  return '@';
 }
 
 function json_(data) {

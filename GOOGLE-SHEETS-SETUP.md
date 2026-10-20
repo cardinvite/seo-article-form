@@ -1,77 +1,74 @@
-# Triển khai ứng dụng quản lý bài SEO bằng Google Apps Script
+# Triển khai ứng dụng quản lý bài SEO
 
-Ứng dụng gồm màn hình đăng nhập Google, danh sách bài viết, form chuẩn SEO và các thao tác tạo, sửa, xóa. Dữ liệu được lưu trong tab `SEO Posts` của Google Sheet.
+Giao diện quản trị (`index.html`, `app.js`, `styles.css`, `config.js`) chạy trên GitHub Pages. Google Apps Script chỉ làm API, đọc/ghi tab `SEO Posts` của Google Sheet. Đăng nhập dùng nút **Sign in with Google** (Google Identity Services), giống repo `goldhome-edu-dangky`.
 
-## 1. Tạo Google Sheet
+## Luồng đăng nhập
 
-1. Tạo một Google Sheet mới.
-2. Lấy Spreadsheet ID trong URL:
+1. `index.html` hiển thị nút Google bằng `googleClientId` trong `config.js`.
+2. Đăng nhập xong, trình duyệt nhận Google ID token và gửi `{action: 'login', idToken}` tới Web App `/exec`.
+3. `Code.gs` xác minh token qua `oauth2.googleapis.com/tokeninfo`: đúng Client ID (`aud`), do Google phát hành (`iss`), email đã xác minh.
+4. Email phải có trong tab `Users` và `active` khác `FALSE`. Máy chủ cấp phiên ký HMAC (`SESSION_SECRET`) hạn 24 giờ, lưu trong `localStorage`.
+5. Mọi request sau gửi kèm phiên; máy chủ kiểm tra chữ ký, hạn và đọc lại tab `Users` mỗi lần, nên khóa tài khoản có hiệu lực ngay.
 
-   ```text
-   https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
-   ```
+Admin **không cần quyền trên Google Sheet**: Web App chạy dưới tài khoản chủ sở hữu (Execute as: Me).
 
-3. Chia sẻ quyền **Editor** của Sheet cho ba tài khoản quản trị:
+## 1. OAuth Client ID
 
-   - `dannguyen22993@gmail.com`
-   - `thanhdieuhr211@gmail.com`
-   - `nguyenthienhoang0412000@gmail.com`
+Dùng chung Client ID với `goldhome-edu-dangky` (đã có trong `config.js`). Hai repo cùng chạy trên origin `https://cardinvite.github.io`, origin không tính đường dẫn, nên không cần sửa gì trong Google Cloud Console.
 
-Không cần tạo cột thủ công. Hàm `setup()` sẽ tạo tab `SEO Posts`, tiêu đề cột và định dạng cơ bản.
+Chỉ khi chạy ở domain khác (custom domain, `http://localhost:...` để test) mới cần vào **Google Cloud Console → APIs & Services → Credentials → OAuth client** và thêm domain đó vào **Authorized JavaScript origins**.
 
-## 2. Tạo project Apps Script
+## 2. Google Sheet và Apps Script
 
-1. Trong Google Sheet, mở **Extensions → Apps Script**.
-2. Thay nội dung file `Code.gs` bằng nội dung của [google-apps-script/Code.gs](google-apps-script/Code.gs).
-3. Tạo file HTML mới tên chính xác là `Admin` rồi dán nội dung [google-apps-script/Admin.html](google-apps-script/Admin.html).
-4. Trong `Code.gs`, thay:
+1. Tạo Google Sheet, lấy Spreadsheet ID trong URL `https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit` và điền vào `CONFIG.SPREADSHEET_ID` của [Code.gs](google-apps-script/Code.gs).
+2. Trong Sheet, mở **Extensions → Apps Script**, dán nội dung `Code.gs`. Bật **Project Settings → Show "appsscript.json"** rồi dán [appsscript.json](google-apps-script/appsscript.json).
+3. **Project Settings → Script Properties → Add script property**: `GOOGLE_CLIENT_ID` = giá trị `googleClientId` trong `config.js`.
+4. Chọn hàm `setup`, bấm **Run** và chấp nhận quyền (Sheets, gọi URL bên ngoài để xác minh token). Hàm này:
+   - tạo tab `SEO Posts` với tiêu đề cột và định dạng;
+   - tạo tab `Users` và thêm tài khoản đang chạy làm `ADMIN`;
+   - tạo Script Property `SESSION_SECRET`.
 
-   ```js
-   SPREADSHEET_ID: 'PASTE_GOOGLE_SHEET_ID_HERE'
-   ```
+## 3. Deploy Web App
 
-   bằng Spreadsheet ID ở bước 1.
-5. Chọn hàm `setup`, bấm **Run** và chấp nhận quyền truy cập. Sau khi chạy thành công, Sheet sẽ có tab `SEO Posts`.
+1. **Deploy → New deployment → Web app**.
+2. **Execute as: Me**, **Who has access: Anyone**.
+3. Bấm **Deploy**, sao chép URL `/exec` và dán vào `appsScriptUrl` trong `config.js`, rồi push lên GitHub Pages.
 
-## 3. Deploy Web App có đăng nhập
+> Deployment cũ dạng *User accessing the web app* không dùng được với cách đăng nhập này. Hãy tạo deployment mới như trên (hoặc sửa deployment cũ sang Execute as: Me) và cập nhật URL trong `config.js`.
 
-1. Chọn **Deploy → New deployment**.
-2. Chọn loại **Web app**.
-3. Ở **Execute as**, chọn **User accessing the web app**.
-4. Ở **Who has access**, chọn phạm vi yêu cầu đăng nhập Google phù hợp, thường là **Anyone with Google account**.
-5. Bấm **Deploy** và sao chép URL kết thúc bằng `/exec`.
+`Who has access: Anyone` là bắt buộc để trình duyệt gọi được API từ GitHub Pages. Không ai đọc được dữ liệu nếu không có Google ID token hợp lệ của email trong tab `Users`.
 
-Mở URL `/exec` để sử dụng ứng dụng. Mỗi quản trị viên có thể phải chấp nhận quyền trong lần mở đầu tiên.
+## 4. Quản lý người dùng
 
-> Không chọn **Execute as: Me**. Ứng dụng dùng email của người đang truy cập để kiểm tra danh sách admin ở phía máy chủ. Ba tài khoản admin cũng cần quyền Editor đối với Google Sheet.
+Sửa trực tiếp tab `Users`, mỗi người một dòng:
 
-Nếu deploy nhầm **Execute as: Me**, mã máy chủ sẽ phát hiện Active User và Effective User không khớp rồi từ chối truy cập. Sau khi sửa tùy chọn deployment, luôn chọn **New version** trước khi deploy lại.
+| email | name | role | active |
+|---|---|---|---|
+| admin@gmail.com | Admin | ADMIN | TRUE |
+| editor@gmail.com | Biên tập | EDITOR | TRUE |
 
-## 4. Cập nhật phiên bản
+- Email viết thường, đúng tài khoản Google người đó đăng nhập.
+- `ADMIN`: xem, tạo, sửa, xóa bài. `EDITOR`: xem, tạo, sửa (không xóa).
+- Đặt `active` = `FALSE` để khóa ngay, kể cả khi phiên còn hạn.
+- Không cần deploy lại khi sửa tab `Users`.
+- Muốn đăng xuất mọi người: xóa Script Property `SESSION_SECRET` rồi chạy lại `setup()`.
 
-Sau khi sửa `Code.gs` hoặc `Admin.html`:
+## 5. Cập nhật phiên bản
 
-1. Mở **Deploy → Manage deployments**.
-2. Chọn deployment hiện tại và bấm **Edit**.
-3. Chọn **New version**.
-4. Bấm **Deploy**.
+Sau khi sửa `Code.gs`: **Deploy → Manage deployments → Edit → New version → Deploy**. URL `/exec` giữ nguyên. Sửa `index.html`, `app.js`, `styles.css`, `config.js` chỉ cần push lên GitHub Pages.
 
-URL `/exec` cũ vẫn được giữ nguyên.
+## Bảo mật
 
-## Quyền quản trị
-
-Danh sách tài khoản được khai báo trong `ADMIN_EMAILS` của `Code.gs`. Việc đọc danh sách, xem chi tiết, lưu và xóa đều gọi `requireAdmin_()` trên máy chủ; sửa HTML phía trình duyệt không thể vượt qua kiểm tra này.
-
-Nếu cần thêm tài khoản, hãy đồng thời:
-
-1. Thêm email viết thường vào `ADMIN_EMAILS`.
-2. Chia sẻ quyền Editor của Google Sheet cho email đó.
-3. Deploy một phiên bản Apps Script mới.
+- Phiên nằm trong `localStorage`. `index.html` có Content-Security-Policy chỉ cho chạy script từ chính trang và `accounts.google.com/gsi/client`, nên HTML trong nội dung bài viết không thể chạy script để đánh cắp phiên. Khi thêm thư viện ngoài, phải bổ sung nguồn đó vào CSP.
+- Nội dung bài viết luôn được hiển thị bằng `textContent` hoặc qua `escapeHtml`; đếm từ dùng `DOMParser` (không tải ảnh, không chạy handler).
+- Dùng máy chung thì bấm **Đăng xuất**.
 
 ## Ghi chú dữ liệu
 
 - `submission_id` là mã duy nhất dùng để xác định dòng khi sửa hoặc xóa.
+- Khi lưu, máy chủ so sánh `updated_at` lúc mở bài với giá trị hiện tại trong Sheet. Nếu người khác đã lưu hoặc xóa bài trong lúc đó, thao tác lưu bị từ chối để không ghi đè dữ liệu.
 - `created_at` được giữ nguyên khi sửa; `updated_at` và `updated_by` được cập nhật mỗi lần lưu.
+- Các cột văn bản được định dạng Plain text trước khi ghi để Sheet không tự đổi chuỗi thành số/ngày (ví dụ mật khẩu `0123`). Với Sheet đã có dữ liệu từ phiên bản cũ, chạy lại `setup()` một lần để áp định dạng cho toàn bộ cột.
 - Nội dung bắt đầu bằng `=`, `+`, `-` hoặc `@` được vô hiệu hóa để tránh công thức ngoài ý muốn trong Sheet.
 - Ảnh được lưu dưới dạng URL. Ứng dụng chưa tải file ảnh nhị phân lên Google Drive.
-- Trường mật khẩu bài viết được lưu trong Sheet nếu dùng chế độ bảo vệ bằng mật khẩu; chỉ nên chia sẻ Sheet cho đúng quản trị viên.
+- Mật khẩu bài viết chỉ được lưu khi chọn chế độ hiển thị "Có mật khẩu".
